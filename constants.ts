@@ -2,7 +2,7 @@ import { SupportedLocale, AppLanguage } from "./types";
 
 export const LLM_MODEL_ID = 'gemini-3-flash-preview';
 export const LLM_DISPLAY_NAME = 'Gemini 3 Flash';
-export const APP_VERSION = 'v1.5.0'; // Bump version
+export const APP_VERSION = 'v1.6.1'; // Bump version
 
 // UI Translations
 export const UI_TEXT = {
@@ -204,6 +204,14 @@ export const getAnalysisSystemPrompt = (targetLang: SupportedLocale, reportLang:
    - 只对源图中**完全可见、未被遮挡**的区域对应的目标图内容进行 LQA 检查。
    - **严禁**报告任何位于遮罩区域内的翻译问题、布局错误或术语问题。
    - 示例：如果源图顶部导航栏被灰色块遮盖，而目标图显示了导航栏，**请完全忽略导航栏中的任何问题**（即使存在明显的翻译错误）。
+
+4. **第四步：UI 层级遮挡过滤 (UI LAYER OCCLUSION FILTERING)**
+   - 当截图中存在**前台活动窗口**（如模态对话框 Modal、确认弹窗 Confirm Dialog、下拉菜单 Dropdown、Toast 通知等）时，执行以下判断：
+     a) **识别前台层（Foreground Layer）**：具有阴影、遮罩蒙层（dimmed overlay）、或明确边框的浮层元素即为前台层。
+     b) **识别背景层（Background Layer）**：前台窗口下方被部分或完全遮挡的页面内容即为背景层。
+     c) **遮挡豁免规则**：如果背景层中的文本因被前台窗口覆盖而显示不完整（被裁剪、被遮盖、不可见），这是**正常的 UI 行为**，**严禁**将其标记为 Layout Issue、Truncation 或 Translation Missing。
+     d) **检查范围限定**：仅对前台活动窗口内部的文本质量和布局进行 LQA 评估。背景层中未被遮挡的可见区域仍需正常检查。
+   - 示例：用户正在操作"删除确认"弹窗，弹窗遮住了背景中的法律声明长文本。→ **正确做法**：忽略被遮的法律文本，仅检查弹窗内的按钮文本和提示信息。→ **错误做法**：报告"背景法律文本被截断，翻译不完整 (MAJOR)"。
 `;
 
   const maskInstructionEn = `
@@ -220,6 +228,14 @@ export const getAnalysisSystemPrompt = (targetLang: SupportedLocale, reportLang:
    - Perform LQA checks ONLY on content that is **VISIBLY UNMASKED** in the Source Image.
    - **DO NOT** report any mistranslations, layout issues, or terminology errors located within the masked zones.
    - Example: If the top header is grayed out in Source, but visible in Target, **IGNORE the header completely** (even if it has mistranslation).
+
+4. **Step 4: UI LAYER OCCLUSION FILTERING**
+   - When the screenshot contains a **foreground active window** (e.g., modal dialog, confirmation popup, dropdown menu, toast notification), apply the following logic:
+     a) **Identify Foreground Layer**: Any floating element with drop shadow, dimmed overlay backdrop, or distinct border is the foreground layer.
+     b) **Identify Background Layer**: Page content partially or fully obscured beneath the foreground window is the background layer.
+     c) **Occlusion Exemption Rule**: If background text appears incomplete, clipped, or invisible BECAUSE it is covered by the foreground window, this is **normal UI behavior**. **DO NOT** flag it as a Layout Issue, Truncation, or Translation Missing.
+     d) **Inspection Scope**: Perform LQA evaluation ONLY on text inside the foreground active window. Background areas that are NOT occluded by the foreground window should still be inspected normally.
+   - Example: User is interacting with a "Delete Confirmation" dialog that covers a legal disclaimer in the background. → **CORRECT**: Ignore the occluded legal text, only check the dialog's button labels and prompt text. → **INCORRECT**: Report "Background legal text is truncated, translation incomplete (MAJOR)".
 `;
     
   const taskDesc = isZh

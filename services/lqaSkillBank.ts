@@ -85,6 +85,20 @@ const GENERAL_SKILLS: LqaSkill[] = [
       "remain visually paired — if expanded text pushes the icon off its natural position, report as Layout.",
     whenToApply: "When icon+label combinations are visible in valid areas.",
   },
+  {
+    name: "ui_layer_occlusion",
+    principle:
+      "When a modal, dialog, popup, dropdown, or toast is visible, the page is split into " +
+      "foreground (the active overlay) and background (the dimmed/covered page). " +
+      "Text in the background that appears cut off or hidden is NOT a layout bug — it is " +
+      "normal UI layering. NEVER report occluded background text as Truncation, Layout Issue, " +
+      "or Translation Missing. Only inspect the foreground window and unoccluded background areas.",
+    whenToApply: "Whenever a floating overlay, modal, dialog, or popup is visible in the screenshot.",
+    examples: [
+      "Delete confirmation dialog covers a legal disclaimer → ignore the disclaimer text",
+      "Dropdown menu overlaps a table row → do NOT flag the partially hidden row as truncated",
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -181,6 +195,19 @@ const SCENE_SKILLS: Record<SceneType, LqaSkill[]> = {
         "Modal body content that expands due to translation may push content below the visible area. " +
         "If the target modal appears significantly taller, flag as a Minor Layout issue.",
       whenToApply: "When modals with substantial body text are visible.",
+    },
+    {
+      name: "modal_background_exclusion",
+      principle:
+        "When a modal/dialog is the active foreground element, ALL background content is " +
+        "in an inactive state. Any text behind the modal that appears clipped, partially hidden, " +
+        "or visually incomplete must be treated as 'Occluded (Ignored)' — not as a real issue. " +
+        "Focus your entire LQA analysis on the modal's title, body text, input fields, and action buttons.",
+      whenToApply: "When any modal, dialog, or overlay popup is the primary interactive element.",
+      examples: [
+        "Confirmation dialog covers page footer → footer text is NOT truncated, it is occluded",
+        "Cookie consent banner overlaps sidebar → sidebar issues are NOT reportable",
+      ],
     },
   ],
 
