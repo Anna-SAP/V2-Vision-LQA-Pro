@@ -252,6 +252,13 @@ ${maskInstructionZh}
 - 只有在无法缩短时，才建议“允许换行”或“增加宽度”。
 - 绝不允许“建议”字段为空。
 
+**术语来源追溯 (Glossary Source Tracing)**：
+- 术语表数据中每条术语末尾附有 \`[source: 文件名]\` 标签，例如：\`Company greeting = Begrüßung des Unternehmens [source: terms_en_de-DE_2025.csv]\`。
+- 当你判定一个问题属于 **Terminology** 类别时，**必须**将该术语匹配到的来源文件名填入 \`glossarySource\` 字段。
+- 直接使用 \`[source: ...]\` 标签中的文件名文本，不要修改或省略。
+- 如果术语不属于任何已加载的术语表（即该问题基于你自身的语言知识判定），则 \`glossarySource\` 填写 "LLM Knowledge"。
+- 非 Terminology 类型的 Issue 不需要填写此字段。
+
 注意：请忽略所有“未翻译（Untranslated）”的文本，这部分由其他团队负责。
 再次强调：**所有报告内容必须使用中文输出。**`
     : `Task Objective:
@@ -266,6 +273,13 @@ You need to inspect the **VALID AREAS** from two perspectives:
 - For "Visual Truncation" issues, your PRIMARY job is to suggest a SHORTER TRANSLATION (abbreviation or synonym) to fit the space.
 - Only suggest "allow wrapping" or "increase width" if no shorter text is possible.
 - The 'suggestionsTarget' field MUST NEVER BE EMPTY.
+
+**GLOSSARY SOURCE TRACING**:
+- Each term in the glossary data has a \`[source: filename]\` tag appended, e.g., \`Company greeting = Begrüßung des Unternehmens [source: terms_en_de-DE_2025.csv]\`.
+- When you classify an issue as **Terminology**, you **MUST** populate the \`glossarySource\` field with the exact filename from the \`[source: ...]\` tag of the matched term.
+- Use the filename text directly from the tag — do not modify or abbreviate it.
+- If the terminology issue is based on your own linguistic knowledge (not from any loaded glossary), set \`glossarySource\` to "LLM Knowledge".
+- Non-Terminology issues do not need this field.
 
 NOTE: Please IGNORE all "Untranslated" text, as this is handled by another team.
 REITERATION: **ALL REPORT CONTENT MUST BE IN ENGLISH.**`;

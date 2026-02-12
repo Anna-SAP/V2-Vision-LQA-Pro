@@ -1,4 +1,5 @@
 
+
 // Data Models
 
 export type AppLanguage = 'zh' | 'en';
@@ -27,6 +28,7 @@ export interface QaIssue {
   targetText: string;
   description: string; // Renamed from descriptionZh
   suggestionsTarget: string[];
+  glossarySource?: string; // Which glossary file this terminology issue was matched against
 }
 
 export interface ScreenshotReport {

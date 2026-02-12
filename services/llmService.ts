@@ -31,6 +31,10 @@ const qaIssueSchema: Schema = {
       type: Type.ARRAY, 
       items: { type: Type.STRING },
       description: "MANDATORY. Provide at least one actionable fix. For Truncation: provide a shorter translation/abbreviation. For Layout: suggest 'Resize container' or similar. NEVER leave empty."
+    },
+    glossarySource: {
+      type: Type.STRING,
+      description: "REQUIRED for Terminology issues ONLY. The exact filename from the [source: filename] tag in the glossary data that this term was matched against. Leave empty string for non-Terminology issues."
     }
   },
   required: ["id", "location", "issueCategory", "severity", "description", "suggestionsTarget"]

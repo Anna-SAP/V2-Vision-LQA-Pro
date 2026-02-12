@@ -90,7 +90,8 @@ export const GlossaryManager: React.FC<GlossaryManagerProps> = ({ currentGlossar
             const parts = line.split('=');
             if (parts.length >= 2) {
                 const sourceKey = parts[0].trim().toLowerCase();
-                termMap.set(sourceKey, line);
+                // Tag each term with its source file for traceability
+                termMap.set(sourceKey, `${line} [source: ${file.name}]`);
             }
         });
     });

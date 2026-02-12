@@ -38,6 +38,8 @@ const generateJiraData = (issue: QaIssue, targetLang: string, fileName: string):
 
 *Location:* ${issue.location || 'N/A'}
 
+*Glossary Source:* ${issue.glossarySource || 'N/A'}
+
 *Source File:* ${fileName}
 
 *Source Text (EN):*
@@ -407,6 +409,11 @@ const IssueCard: React.FC<{
           {getIcon(issue.severity)}
           <span className="font-bold text-sm text-slate-800">{issue.id}</span>
           <span className="text-xs px-2 py-0.5 bg-white border rounded text-slate-500">{issue.issueCategory}</span>
+          {issue.issueCategory === 'Terminology' && issue.glossarySource && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 border border-purple-200 rounded text-purple-600 truncate max-w-[200px]" title={issue.glossarySource}>
+              📋 {issue.glossarySource}
+            </span>
+          )}
         </div>
         
         <div className="flex items-center gap-2">
