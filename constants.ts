@@ -176,7 +176,7 @@ export const UI_TEXT = {
   }
 };
 
-export const getAnalysisSystemPrompt = (targetLang: SupportedLocale, reportLang: AppLanguage) => {
+export const getAnalysisSystemPrompt = (targetLang: SupportedLocale, reportLang: AppLanguage, skillsBlock?: string) => {
   const langName = targetLang === 'fr-FR' ? 'French (Français)' : 'German (Deutsch)';
   const langCode = targetLang;
   
@@ -254,6 +254,11 @@ You need to inspect the **VALID AREAS** from two perspectives:
 NOTE: Please IGNORE all "Untranslated" text, as this is handled by another team.
 REITERATION: **ALL REPORT CONTENT MUST BE IN ENGLISH.**`;
 
+  // SkillBank Integration: inject retrieved skills between task description and evaluation dimensions
+  const skillsSection = skillsBlock
+    ? `\n${skillsBlock}\n`
+    : '';
+
   return `
 ${roleDesc}
 You possess strong visual understanding capabilities to read and analyze UI screenshots.
@@ -264,7 +269,7 @@ Inputs:
 3. glossaryText (Optional): Project context/glossary strings.
 
 ${taskDesc}
-
+${skillsSection}
 Evaluation Dimensions (0-5 score):
 - Translation Accuracy
 - Terminology Consistency

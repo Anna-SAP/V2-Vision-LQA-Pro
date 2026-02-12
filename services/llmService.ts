@@ -2,6 +2,7 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { LlmRequestPayload, LlmResponse, ScreenshotReport } from '../types';
 import { getAnalysisSystemPrompt, LLM_MODEL_ID } from '../constants';
 import { determineStrictQuality, enforceScoreConsistency } from './reportGenerator';
+import { retrieveSkills, formatSkillsForPrompt } from './lqaSkillBank';
 
 interface ProcessedImage {
   mimeType: string;
@@ -173,8 +174,14 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
         processImageUrl(payload.deImageBase64 || '')
       ]);
 
-      // 2. Prepare Prompt (Dynamic based on language)
-      const systemPrompt = getAnalysisSystemPrompt(payload.targetLanguage, payload.reportLanguage);
+      // 2. Retrieve SkillBank skills (inspired by SkillRL §3.2 — hierarchical retrieval)
+      const sceneHint = payload.screenshotId || '';
+      const retrievedSkills = retrieveSkills(sceneHint, payload.targetLanguage);
+      const skillsBlock = formatSkillsForPrompt(retrievedSkills);
+      console.log(`[SkillBank] Scene: ${retrievedSkills.sceneType} | General: ${retrievedSkills.generalSkills.length} | Scene-specific: ${retrievedSkills.sceneSkills.length}`);
+
+      // 3. Prepare Prompt (Dynamic based on language + skills)
+      const systemPrompt = getAnalysisSystemPrompt(payload.targetLanguage, payload.reportLanguage, skillsBlock);
       
       const userPrompt = `
         Project Context / Glossary (Total Chars: ${payload.glossaryText?.length || 0}):
@@ -200,7 +207,7 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
         IMPORTANT: Your response MUST be valid JSON adhering strictly to the provided schema.
       `;
 
-      // 3. Call Gemini API with Schema Enforcement
+      // 4. Call Gemini API with Schema Enforcement
       const response = await ai.models.generateContent({
         model: LLM_MODEL_ID,
         contents: {
@@ -224,7 +231,7 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
         throw new Error("Received empty response from Gemini API.");
       }
 
-      // 4. Parse Response
+      // 5. Parse Response
       let parsedReport: ScreenshotReport;
       try {
         // Handle potential markdown wrapping (e.g., ```json ... ```)
