@@ -1,0 +1,5 @@
+{
+  "name": "V2 🥝 Vision LQA Pro",
+  "description": "A Vision LLM-powered tool for automated localization quality assurance, comparing en-US and de-DE interface screenshots.",
+  "requestFramePermissions": []
+}
