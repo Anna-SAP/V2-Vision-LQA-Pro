@@ -2,11 +2,11 @@ import React, { useState, useRef, useCallback, Suspense, useEffect } from 'react
 import { UploadArea } from './components/UploadArea';
 import { PairList } from './components/PairList';
 import { CompareView } from './components/CompareView';
-import { GlossaryManager } from './components/GlossaryManager';
+import { GlossaryManager, GlossaryManagerRef } from './components/GlossaryManager';
 import { ScreenshotPair, LlmRequestPayload, BulkProcessingState, ScreenshotReport, AppLanguage } from './types';
 import { callTranslationQaLLM } from './services/llmService';
 import { generateReportHtml, generateExportFilename } from './services/reportGenerator';
-import { Layers, Activity, BookOpen, PanelLeftOpen, PanelLeftClose, PlayCircle, Globe, Loader2, RotateCcw, Trash2, GripVertical } from 'lucide-react';
+import { Layers, Activity, BookOpen, PanelLeftOpen, PanelLeftClose, PlayCircle, Globe, Loader2, RotateCcw, Trash2, GripVertical, BookDown } from 'lucide-react';
 import { LLM_DISPLAY_NAME, APP_VERSION, UI_TEXT } from './constants';
 import JSZip from 'jszip';
 
@@ -49,6 +49,10 @@ const App: React.FC = () => {
     isComplete: false
   });
   
+  // Onboarding State
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const glossaryManagerRef = useRef<GlossaryManagerRef>(null);
+
   const t = UI_TEXT[appLanguage];
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -93,6 +97,26 @@ const App: React.FC = () => {
     };
   }, [isResizingRight, resizeRight, stopResizingRight]);
 
+  // Onboarding Check
+  useEffect(() => {
+    const hasInitialized = localStorage.getItem('vision_lqa_initialized');
+    if (!hasInitialized && !glossaryText) {
+       setShowOnboarding(true);
+    }
+  }, []);
+
+  const handleOnboardingAction = async (lang: 'fr-FR' | 'de-DE') => {
+      if (glossaryManagerRef.current) {
+          setShowOnboarding(false);
+          await glossaryManagerRef.current.loadPreset(lang);
+          localStorage.setItem('vision_lqa_initialized', 'true');
+      }
+  };
+
+  const skipOnboarding = () => {
+      setShowOnboarding(false);
+      localStorage.setItem('vision_lqa_initialized', 'true');
+  };
 
   // Handle Language Change
   const toggleLanguage = () => {
@@ -524,6 +548,40 @@ const App: React.FC = () => {
       <main className="flex-1 flex overflow-hidden">
         
         <aside className={`${isSidebarOpen ? 'w-80' : 'w-0'} flex flex-col bg-white border-r border-slate-200 transition-all duration-300 relative shrink-0`}>
+          
+          {/* Onboarding Banner */}
+          {showOnboarding && (
+              <div className="bg-indigo-50 border-b border-indigo-100 p-4">
+                  <div className="flex items-start mb-2">
+                      <BookDown className="w-4 h-4 text-indigo-600 mr-2 mt-0.5" />
+                      <div>
+                          <h4 className="text-sm font-bold text-indigo-900">{t.glossary.onboardingTitle}</h4>
+                          <p className="text-xs text-indigo-700 leading-snug mt-1">{t.glossary.onboardingDesc}</p>
+                      </div>
+                  </div>
+                  <div className="flex space-x-2 mt-3 pl-6">
+                      <button 
+                         onClick={() => handleOnboardingAction('de-DE')}
+                         className="flex-1 bg-white border border-indigo-200 text-indigo-800 text-xs font-bold py-1.5 px-2 rounded shadow-sm hover:bg-indigo-600 hover:text-white transition-colors"
+                      >
+                         🇩🇪 Load DE
+                      </button>
+                      <button 
+                         onClick={() => handleOnboardingAction('fr-FR')}
+                         className="flex-1 bg-white border-indigo-200 text-indigo-800 text-xs font-bold py-1.5 px-2 rounded shadow-sm hover:bg-indigo-600 hover:text-white transition-colors"
+                      >
+                         🇫🇷 Load FR
+                      </button>
+                  </div>
+                  <button 
+                     onClick={skipOnboarding}
+                     className="w-full text-center text-[10px] text-indigo-400 mt-2 hover:text-indigo-600"
+                  >
+                     Skip for now
+                  </button>
+              </div>
+          )}
+
           <div className="p-4 border-b border-slate-100">
             <UploadArea onPairsCreated={handlePairsCreated} t={t} />
           </div>
@@ -535,6 +593,7 @@ const App: React.FC = () => {
             </div>
             
             <GlossaryManager 
+              ref={glossaryManagerRef}
               currentGlossary={glossaryText}
               onUpdate={setGlossaryText}
               onLangDetected={setGlossaryDetectedLang}

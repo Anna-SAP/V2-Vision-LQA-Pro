@@ -2,7 +2,7 @@ import { SupportedLocale, AppLanguage } from "./types";
 
 export const LLM_MODEL_ID = 'gemini-3-flash-preview';
 export const LLM_DISPLAY_NAME = 'Gemini 3 Flash';
-export const APP_VERSION = 'v1.6.2'; // Bump version
+export const APP_VERSION = 'v1.7.0'; // Bump version for Glossary Auto-Load
 
 // UI Translations
 export const UI_TEXT = {
@@ -69,9 +69,13 @@ export const UI_TEXT = {
       dragDropCompact: "点击或拖拽添加更多文件...",
       formats: "支持 .xlsx, .csv (最大 50MB)",
       parsing: "解析中...",
-      loadDefault: "预置",
-      defaultDe: "DE 标准术语",
-      defaultFr: "FR 标准术语",
+      loadDefault: "加载预设",
+      defaultDe: "🇩🇪 加载 DE 术语",
+      defaultFr: "🇫🇷 加载 FR 术语",
+      loadingPreset: "正在加载预设...",
+      presetLoaded: "预设已加载",
+      onboardingTitle: "初始化项目上下文",
+      onboardingDesc: "为当前项目加载标准术语表以确保 LQA 准确性。",
       history: "历史记录",
       preview: "预览 (前10条)",
       totalTerms: "总术语数",
@@ -86,7 +90,7 @@ export const UI_TEXT = {
       mergedTotal: "当前生效",
       removeFile: "移除此文件",
       resetAll: "重置所有上下文",
-      emptyState: "暂无术语文件，请上传",
+      emptyState: "暂无术语文件，请上传或加载预设",
       termCount: "{count} 条术语"
     }
   },
@@ -153,9 +157,13 @@ export const UI_TEXT = {
       dragDropCompact: "Click or drag to add more files...",
       formats: "Supports .xlsx, .csv (Max 50MB)",
       parsing: "Parsing...",
-      loadDefault: "Presets",
-      defaultDe: "DE Standard",
-      defaultFr: "FR Standard",
+      loadDefault: "Load Presets",
+      defaultDe: "🇩🇪 Load DE Terms",
+      defaultFr: "🇫🇷 Load FR Terms",
+      loadingPreset: "Loading presets...",
+      presetLoaded: "Preset Loaded",
+      onboardingTitle: "Initialize Project Context",
+      onboardingDesc: "Load standard glossaries to ensure LQA accuracy.",
       history: "History",
       preview: "Preview (Top 10)",
       totalTerms: "Total Terms",
@@ -170,7 +178,7 @@ export const UI_TEXT = {
       mergedTotal: "Active Terms",
       removeFile: "Remove file",
       resetAll: "Reset All Context",
-      emptyState: "No glossary files loaded",
+      emptyState: "No glossary files loaded. Upload or load presets.",
       termCount: "{count} terms"
     }
   }

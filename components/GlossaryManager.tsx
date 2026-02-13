@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { FileSpreadsheet, Upload, History, Trash2, Check, AlertCircle, FileText, Loader2, Layers, Plus, X, Database } from 'lucide-react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { FileSpreadsheet, Upload, History, Trash2, Check, AlertCircle, FileText, Loader2, Layers, Plus, X, Database, BookDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { PRESET_GLOSSARIES } from '../services/terminologyManifest';
+
+export interface GlossaryManagerRef {
+  loadPreset: (lang: 'fr-FR' | 'de-DE') => Promise<void>;
+}
 
 interface GlossaryManagerProps {
   currentGlossary: string;
@@ -23,7 +28,7 @@ interface LoadedFile {
   terms: string[]; // Array of "Source = Target"
 }
 
-export const GlossaryManager: React.FC<GlossaryManagerProps> = ({ currentGlossary, onUpdate, onLangDetected, t }) => {
+export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, onLangDetected, t }, ref) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'import'>('import'); // Default to import
   const [isDragging, setIsDragging] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -195,35 +200,65 @@ export const GlossaryManager: React.FC<GlossaryManagerProps> = ({ currentGlossar
     }
   };
 
-  const fetchDefaultGlossary = async (lang: 'de' | 'fr') => {
+  // Exposed method to load presets via Ref
+  const fetchDefaultGlossary = async (lang: 'fr-FR' | 'de-DE') => {
     setIsParsing(true);
     setError(null);
-    const fileName = lang === 'de' ? 'Standard_DE_Glossary.xlsx' : 'Standard_FR_Glossary.xlsx';
+    
     try {
-        const mockTerms = lang === 'de' 
-            ? ["Site = Standort", "Extension = Nebenstelle", "Call Queue = Warteschleife", "IVR Menu = IVR-Menü"]
-            : ["Site = Site", "Extension = Extension", "Call Queue = File d'attente", "IVR Menu = Menu IVR"];
-        
-        await new Promise(r => setTimeout(r, 600));
-
-        const newFileObj: LoadedFile = {
-            id: Math.random().toString(36).substr(2, 9),
-            name: fileName,
-            count: mockTerms.length,
-            terms: mockTerms
-        };
-
-        if (uploadMode === 'replace') {
-            setLoadedFiles([newFileObj]);
-        } else {
-            setLoadedFiles(prev => [...prev, newFileObj]);
+        const presets = PRESET_GLOSSARIES[lang];
+        if (!presets || presets.length === 0) {
+            throw new Error(`No presets found for ${lang}`);
         }
 
-    } catch (e) {
-        setError("Failed to load default glossary");
+        const newFiles: LoadedFile[] = [];
+
+        // Fetch all preset files in parallel
+        await Promise.all(presets.map(async (preset) => {
+            const response = await fetch(preset.path);
+            if (!response.ok) throw new Error(`Failed to fetch ${preset.name}`);
+            
+            const blob = await response.blob();
+            // Convert Blob to File to reuse existing processing logic
+            const file = new File([blob], preset.name, { type: blob.type });
+            const terms = await processFileContent(file);
+
+            newFiles.push({
+                id: Math.random().toString(36).substr(2, 9),
+                name: preset.name,
+                count: terms.length,
+                terms: terms
+            });
+        }));
+        
+        // Wait a bit for UI smoothness
+        await new Promise(r => setTimeout(r, 400));
+
+        // Always replace when loading a full preset set (usually initial load)
+        // or append if user explicitly chose append mode.
+        // For Onboarding, we assume 'replace' logic or simple append if empty.
+        
+        if (loadedFiles.length === 0 || uploadMode === 'replace') {
+            setLoadedFiles(newFiles);
+        } else {
+            setLoadedFiles(prev => [...prev, ...newFiles]);
+        }
+
+    } catch (e: any) {
+        console.error("Preset load error:", e);
+        setError(`Failed to load presets: ${e.message}`);
     } finally {
         setIsParsing(false);
     }
+  };
+
+  useImperativeHandle(ref, () => ({
+    loadPreset: fetchDefaultGlossary
+  }));
+
+  // Helper to check if a specific language is already loaded
+  const isLangLoaded = (lang: 'de' | 'fr') => {
+      return loadedFiles.some(f => detectLanguageFromFile(f.name) === (lang === 'de' ? 'de-DE' : 'fr-FR'));
   };
 
   return (
@@ -283,6 +318,32 @@ export const GlossaryManager: React.FC<GlossaryManagerProps> = ({ currentGlossar
                     </span>
                  </div>
                )}
+            </div>
+            
+            {/* Preset Buttons Header */}
+            <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 flex space-x-2 shrink-0 justify-center">
+                 <button 
+                     onClick={() => fetchDefaultGlossary('de-DE')}
+                     disabled={isLangLoaded('de') || isParsing}
+                     className={`text-[10px] px-3 py-1.5 rounded-full border transition-all flex items-center space-x-1
+                         ${isLangLoaded('de') 
+                            ? 'bg-emerald-100 text-emerald-700 border-emerald-200 cursor-default' 
+                            : 'bg-white text-slate-600 border-slate-300 hover:border-accent hover:text-accent shadow-sm'}`}
+                 >
+                     <span>{isLangLoaded('de') ? <Check className="w-3 h-3" /> : '🇩🇪'}</span>
+                     <span>{isLangLoaded('de') ? t.glossary.presetLoaded : t.glossary.defaultDe}</span>
+                 </button>
+                 <button 
+                     onClick={() => fetchDefaultGlossary('fr-FR')}
+                     disabled={isLangLoaded('fr') || isParsing}
+                     className={`text-[10px] px-3 py-1.5 rounded-full border transition-all flex items-center space-x-1
+                         ${isLangLoaded('fr') 
+                            ? 'bg-emerald-100 text-emerald-700 border-emerald-200 cursor-default' 
+                            : 'bg-white text-slate-600 border-slate-300 hover:border-accent hover:text-accent shadow-sm'}`}
+                 >
+                     <span>{isLangLoaded('fr') ? <Check className="w-3 h-3" /> : '🇫🇷'}</span>
+                     <span>{isLangLoaded('fr') ? t.glossary.presetLoaded : t.glossary.defaultFr}</span>
+                 </button>
             </div>
 
             {/* Main Content Area */}
@@ -365,25 +426,7 @@ export const GlossaryManager: React.FC<GlossaryManagerProps> = ({ currentGlossar
                 ) : (
                     <div className="h-10 flex items-center justify-center bg-slate-50 rounded-lg border border-slate-200">
                         <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
-                        <span className="text-xs text-slate-600 font-medium">{t.glossary.parsing}</span>
-                    </div>
-                )}
-
-                {/* Preset Actions (Optional: Only show if empty to save space?) */}
-                {loadedFiles.length === 0 && (
-                    <div className="mt-2 flex justify-center space-x-3">
-                         <button 
-                             onClick={() => fetchDefaultGlossary('de')}
-                             className="text-[10px] text-slate-400 hover:text-accent underline decoration-dotted"
-                         >
-                             {t.glossary.loadDefault} DE
-                         </button>
-                         <button 
-                             onClick={() => fetchDefaultGlossary('fr')}
-                             className="text-[10px] text-slate-400 hover:text-accent underline decoration-dotted"
-                         >
-                             {t.glossary.loadDefault} FR
-                         </button>
+                        <span className="text-xs text-slate-600 font-medium">{t.glossary.loadingPreset}</span>
                     </div>
                 )}
 
@@ -406,4 +449,6 @@ export const GlossaryManager: React.FC<GlossaryManagerProps> = ({ currentGlossar
       </div>
     </div>
   );
-};
+});
+
+GlossaryManager.displayName = "GlossaryManager";
