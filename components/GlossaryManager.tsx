@@ -81,6 +81,7 @@ export const GlossaryManager: React.FC<GlossaryManagerProps> = ({ currentGlossar
 
     const termMap = new Map<string, string>();
     const fileLangs = new Set<'de-DE' | 'fr-FR'>();
+    let termCounter = 1; // Global counter for unique IDs across all files
 
     files.forEach(file => {
         const detected = detectLanguageFromFile(file.name);
@@ -90,8 +91,11 @@ export const GlossaryManager: React.FC<GlossaryManagerProps> = ({ currentGlossar
             const parts = line.split('=');
             if (parts.length >= 2) {
                 const sourceKey = parts[0].trim().toLowerCase();
-                // Tag each term with its source file for traceability
-                termMap.set(sourceKey, `${line} [source: ${file.name}]`);
+                // Generate Unique ID e.g. TERM-001
+                const termId = `TERM-${String(termCounter++).padStart(3, '0')}`;
+                // Tag each term with ID and source file for traceability and grounding
+                // Format: [ID:TERM-001] Source = Target [source: filename]
+                termMap.set(sourceKey, `[ID:${termId}] ${line} [source: ${file.name}]`);
             }
         });
     });

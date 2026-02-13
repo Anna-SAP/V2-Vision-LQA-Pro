@@ -2,7 +2,7 @@ import { SupportedLocale, AppLanguage } from "./types";
 
 export const LLM_MODEL_ID = 'gemini-3-flash-preview';
 export const LLM_DISPLAY_NAME = 'Gemini 3 Flash';
-export const APP_VERSION = 'v1.6.1'; // Bump version
+export const APP_VERSION = 'v1.6.2'; // Bump version
 
 // UI Translations
 export const UI_TEXT = {
@@ -237,11 +237,52 @@ export const getAnalysisSystemPrompt = (targetLang: SupportedLocale, reportLang:
      d) **Inspection Scope**: Perform LQA evaluation ONLY on text inside the foreground active window. Background areas that are NOT occluded by the foreground window should still be inspected normally.
    - Example: User is interacting with a "Delete Confirmation" dialog that covers a legal disclaimer in the background. → **CORRECT**: Ignore the occluded legal text, only check the dialog's button labels and prompt text. → **INCORRECT**: Report "Background legal text is truncated, translation incomplete (MAJOR)".
 `;
-    
+  
+  const termRulesZh = `
+### 术语一致性检查规则 (TERMINOLOGY COMPLIANCE RULES)
+
+**核心原则：无证据，不指控 (NO ID, NO ISSUE)**
+
+1. **严格匹配 (Strict Matching)**：
+   - 只有当你能在提供的术语表上下文中找到该词条的**唯一标识符 (例如 [ID:TERM-012])** 时，才能将问题归类为 \`Terminology\`。
+   - 术语表格式为：\`[ID:xxx] Source = Target [source: filename]\`。
+
+2. **禁止幻觉 (Zero Hallucination)**：
+   - 如果源文本 (Source Text) 不在术语表中，或者你无法找到对应的 \`[ID:xxx]\`：
+     - **严禁**将 issueCategory 设为 \`Terminology\`。
+     - **严禁**在描述中声称"根据术语表..."。
+     - 你可以将此类问题归类为 \`Style\` (风格建议) 或 \`Mistranslation\` (如果意思完全错误)，并明确标注"基于通用翻译标准"。
+
+3. **证据引用 (Citation)**：
+   - 在描述 Terminology 问题时，必须在末尾引用 ID。
+   - 格式示例："翻译与术语表不符。应为：'Enregistrer' (参考: [ID:TERM-002])。"
+`;
+
+  const termRulesEn = `
+### TERMINOLOGY COMPLIANCE RULES
+
+**CORE PRINCIPLE: NO ID, NO ISSUE**
+
+1. **Strict Matching**:
+   - You may classify an issue as \`Terminology\` **IF AND ONLY IF** you can locate the specific **Unique Identifier (e.g., [ID:TERM-012])** in the provided glossary context.
+   - Glossary format provided is: \`[ID:xxx] Source = Target [source: filename]\`。
+
+2. **Zero Hallucination**:
+   - If the Source Text is NOT in the glossary, or you cannot find a matching \`[ID:xxx]\`：
+     - **STRICTLY FORBIDDEN** to set issueCategory to \`Terminology\`.
+     - **STRICTLY FORBIDDEN** to claim "According to the glossary..." in the description.
+     - You must classify such issues as \`Style\` (General suggestion) or \`Mistranslation\` (if meaning is wrong), and explicitly state "Based on general translation standards".
+
+3. **Citation Requirement**:
+   - When describing a Terminology issue, you MUST append the ID reference.
+   - Example: "Translation does not match glossary. Expect: 'Enregistrer' (Ref: [ID:TERM-002])."
+`;
+
   const taskDesc = isZh
     ? `任务目标：
 这是一次 UI 截图测试。
 ${maskInstructionZh}
+${termRulesZh}
 
 你需要从两个角度检查**有效区域**内的内容：
 1. 语言层面：翻译准确性（不包含未翻译的内容）、术语、语法、语气、文化与格式（日期/数字/单位）；
@@ -264,6 +305,7 @@ ${maskInstructionZh}
     : `Task Objective:
 This is a UI Screenshot Testing task.
 ${maskInstructionEn}
+${termRulesEn}
 
 You need to inspect the **VALID AREAS** from two perspectives:
 1. Linguistic: Translation accuracy (excluding untranslated text), terminology, grammar, tone, culture, and formatting (dates/numbers/units).

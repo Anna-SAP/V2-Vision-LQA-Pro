@@ -35,6 +35,10 @@ const qaIssueSchema: Schema = {
     glossarySource: {
       type: Type.STRING,
       description: "REQUIRED for Terminology issues ONLY. The exact filename from the [source: filename] tag in the glossary data that this term was matched against. Leave empty string for non-Terminology issues."
+    },
+    glossaryTermId: {
+      type: Type.STRING,
+      description: "REQUIRED for Terminology issues. Must match the [ID:TERM-xxx] tag from the glossary context exactly. If not found, set to null."
     }
   },
   required: ["id", "location", "issueCategory", "severity", "description", "suggestionsTarget"]
@@ -161,6 +165,46 @@ async function retryWithBackoff<T>(
   }
 }
 
+// Hallucination Guardrail: Sanitizes the report against the glossary ID
+const sanitizeReport = (report: ScreenshotReport, glossaryText: string | undefined) => {
+  if (!glossaryText) return;
+  
+  // Create a set of valid IDs present in the glossary text
+  // Looking for pattern [ID:TERM-xxx]
+  const validIds = new Set<string>();
+  const matches = glossaryText.match(/\[ID:TERM-\d+\]/g);
+  if (matches) {
+    matches.forEach(id => validIds.add(id)); // e.g., "[ID:TERM-001]"
+  }
+
+  report.issues.forEach(issue => {
+    if (issue.issueCategory === 'Terminology') {
+      
+      const termIdRaw = issue.glossaryTermId; // e.g. "TERM-001"
+      const formattedId = termIdRaw ? `[ID:${termIdRaw}]` : null;
+      
+      const isValid = formattedId && validIds.has(formattedId);
+
+      if (!isValid) {
+        // Hallucination detected
+        console.warn(`[Hallucination Guard] Downgrading Terminology issue ${issue.id} - Invalid ID: ${termIdRaw}`);
+        issue.issueCategory = 'Style'; // Downgrade to Style
+        issue.severity = 'Minor';
+        issue.description = `[Auto-Downgraded] ${issue.description} (Reason: Terminology ID not found in glossary)`;
+        // Clear the fake ID
+        issue.glossaryTermId = undefined;
+        issue.glossarySource = 'LLM Knowledge (Downgraded)';
+      }
+    }
+  });
+  
+  // If no terminology issues remain, set terminology score to 5.
+  const termIssues = report.issues.filter(i => i.issueCategory === 'Terminology');
+  if (termIssues.length === 0) {
+    report.overall.scores.terminology = 5;
+  }
+};
+
 export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<LlmResponse> {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -258,10 +302,13 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
       // E.g. If LLM says "Good" but finds Layout issues, we downgrade it to "Poor" here.
       // This serves as the single source of truth for the entire app.
       
-      // 1. Enforce Scores (Downgrade high scores if major issues exist)
+      // 1. Sanitize Report (Hallucination Check)
+      sanitizeReport(parsedReport, payload.glossaryText);
+
+      // 2. Enforce Scores (Downgrade high scores if major issues exist)
       enforceScoreConsistency(parsedReport);
 
-      // 2. Determine Final Strict Label based on issues
+      // 3. Determine Final Strict Label based on issues
       const strictLevel = determineStrictQuality(parsedReport);
       
       // Type assertion needed as strictLevel includes 'Excellent' which might slightly differ from 'Perfect' in some schemas, 

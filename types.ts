@@ -1,5 +1,6 @@
 
 
+
 // Data Models
 
 export type AppLanguage = 'zh' | 'en';
@@ -29,6 +30,7 @@ export interface QaIssue {
   description: string; // Renamed from descriptionZh
   suggestionsTarget: string[];
   glossarySource?: string; // Which glossary file this terminology issue was matched against
+  glossaryTermId?: string; // Unique ID (e.g. TERM-001) for strict hallucination prevention
 }
 
 export interface ScreenshotReport {
