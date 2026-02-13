@@ -212,32 +212,64 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
         }
 
         const newFiles: LoadedFile[] = [];
+        let fetchFailed = false;
 
-        // Fetch all preset files in parallel
-        await Promise.all(presets.map(async (preset) => {
-            const response = await fetch(preset.path);
-            if (!response.ok) throw new Error(`Failed to fetch ${preset.name}`);
+        // Fetch all preset files in parallel, with try/catch for resilience
+        try {
+            await Promise.all(presets.map(async (preset) => {
+                const response = await fetch(preset.path);
+                if (!response.ok) throw new Error(`Failed to fetch ${preset.name} (Status: ${response.status})`);
+                
+                const blob = await response.blob();
+                // Convert Blob to File to reuse existing processing logic
+                const file = new File([blob], preset.name, { type: blob.type });
+                const terms = await processFileContent(file);
+
+                newFiles.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: preset.name,
+                    count: terms.length,
+                    terms: terms
+                });
+            }));
+        } catch (err) {
+            console.warn("Static preset files not found, falling back to embedded standards.", err);
+            fetchFailed = true;
+        }
+
+        // Fallback Logic: If files are missing (e.g. in some dev environments), load essential terms
+        if (fetchFailed || newFiles.length === 0) {
+            const fallbackTerms = lang === 'de-DE' 
+                ? [
+                    "Site = Standort", 
+                    "Extension = Nebenstelle", 
+                    "Call Queue = Warteschleife", 
+                    "IVR Menu = IVR-Menü",
+                    "Company greeting = Begrüßung des Unternehmens"
+                  ]
+                : [
+                    "Site = Site", 
+                    "Extension = Extension", 
+                    "Call Queue = File d'attente", 
+                    "IVR Menu = Menu IVR",
+                    "Company greeting = Message d'accueil de l'entreprise"
+                  ];
             
-            const blob = await response.blob();
-            // Convert Blob to File to reuse existing processing logic
-            const file = new File([blob], preset.name, { type: blob.type });
-            const terms = await processFileContent(file);
-
             newFiles.push({
-                id: Math.random().toString(36).substr(2, 9),
-                name: preset.name,
-                count: terms.length,
-                terms: terms
+                id: 'fallback-' + lang,
+                name: `Standard_${lang === 'de-DE' ? 'DE' : 'FR'}_Glossary`,
+                count: fallbackTerms.length,
+                terms: fallbackTerms
             });
-        }));
+            // Clear error if we successfully provided fallback
+            setError(null);
+        }
         
         // Wait a bit for UI smoothness
         await new Promise(r => setTimeout(r, 400));
 
         // Always replace when loading a full preset set (usually initial load)
         // or append if user explicitly chose append mode.
-        // For Onboarding, we assume 'replace' logic or simple append if empty.
-        
         if (loadedFiles.length === 0 || uploadMode === 'replace') {
             setLoadedFiles(newFiles);
         } else {
