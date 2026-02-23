@@ -212,58 +212,43 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
         }
 
         const newFiles: LoadedFile[] = [];
-        let fetchFailed = false;
+        
+        // Cache busting timestamp
+        const cacheBuster = `?t=${Date.now()}`;
+        
+        // Use Vite's BASE_URL to correctly resolve public assets in all environments
+        // This fixes the issue where absolute paths failed in preview/sub-path deployments
+        const metaEnv = (import.meta as any).env || {};
+        const rawBaseUrl = metaEnv.BASE_URL || '/';
+        const baseUrl = rawBaseUrl.endsWith('/') 
+            ? rawBaseUrl 
+            : rawBaseUrl + '/';
 
-        // Fetch all preset files in parallel, with try/catch for resilience
-        try {
-            await Promise.all(presets.map(async (preset) => {
-                const response = await fetch(preset.path);
-                if (!response.ok) throw new Error(`Failed to fetch ${preset.name} (Status: ${response.status})`);
-                
-                const blob = await response.blob();
-                // Convert Blob to File to reuse existing processing logic
-                const file = new File([blob], preset.name, { type: blob.type });
-                const terms = await processFileContent(file);
-
-                newFiles.push({
-                    id: Math.random().toString(36).substr(2, 9),
-                    name: preset.name,
-                    count: terms.length,
-                    terms: terms
-                });
-            }));
-        } catch (err) {
-            console.warn("Static preset files not found, falling back to embedded standards.", err);
-            fetchFailed = true;
-        }
-
-        // Fallback Logic: If files are missing (e.g. in some dev environments), load essential terms
-        if (fetchFailed || newFiles.length === 0) {
-            const fallbackTerms = lang === 'de-DE' 
-                ? [
-                    "Site = Standort", 
-                    "Extension = Nebenstelle", 
-                    "Call Queue = Warteschleife", 
-                    "IVR Menu = IVR-Menü",
-                    "Company greeting = Begrüßung des Unternehmens"
-                  ]
-                : [
-                    "Site = Site", 
-                    "Extension = Extension", 
-                    "Call Queue = File d'attente", 
-                    "IVR Menu = Menu IVR",
-                    "Company greeting = Message d'accueil de l'entreprise"
-                  ];
+        // Fetch all preset files in parallel
+        await Promise.all(presets.map(async (preset) => {
+            // Construct the full path: BASE_URL + Relative Path + Cache Buster
+            // e.g., /my-app/terminologies/fr/file.xlsx?t=123
+            const fullPath = `${baseUrl}${preset.path}${cacheBuster}`;
             
+            const response = await fetch(fullPath);
+            
+            if (!response.ok) {
+                console.error(`Fetch Failed: ${fullPath} returned ${response.status}`);
+                throw new Error(`Failed to fetch ${preset.name} (Status: ${response.status}). Ensure file exists in /public/${preset.path}`);
+            }
+            
+            const blob = await response.blob();
+            // Convert Blob to File to reuse existing processing logic
+            const file = new File([blob], preset.name, { type: blob.type });
+            const terms = await processFileContent(file);
+
             newFiles.push({
-                id: 'fallback-' + lang,
-                name: `Standard_${lang === 'de-DE' ? 'DE' : 'FR'}_Glossary`,
-                count: fallbackTerms.length,
-                terms: fallbackTerms
+                id: Math.random().toString(36).substr(2, 9),
+                name: preset.name,
+                count: terms.length,
+                terms: terms
             });
-            // Clear error if we successfully provided fallback
-            setError(null);
-        }
+        }));
         
         // Wait a bit for UI smoothness
         await new Promise(r => setTimeout(r, 400));
@@ -278,7 +263,7 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
 
     } catch (e: any) {
         console.error("Preset load error:", e);
-        setError(`Failed to load presets: ${e.message}`);
+        setError(`${e.message}`);
     } finally {
         setIsParsing(false);
     }

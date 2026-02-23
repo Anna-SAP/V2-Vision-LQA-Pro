@@ -1,6 +1,7 @@
 /**
  * Static Glossary Manifest
  * Maps locale codes to static .xlsx files located in the /public/terminologies directory.
+ * Paths are relative to the public root (no leading slash) to support BASE_URL resolution.
  */
 
 export interface TerminologyResource {
