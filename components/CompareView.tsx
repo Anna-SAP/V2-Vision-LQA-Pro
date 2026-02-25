@@ -5,11 +5,22 @@ import { ZoomIn, ZoomOut, Maximize, ArrowDown, GalleryHorizontal, GalleryVertica
 interface CompareViewProps {
   pair: ScreenshotPair | null;
   t: any;
+  hoveredIssueId: string | null;
+  activeIssueId: string | null;
+  onIssueHover: (id: string | null) => void;
+  onIssueClick: (id: string | null) => void;
 }
 
 type LayoutMode = 'horizontal' | 'vertical';
 
-export const CompareView: React.FC<CompareViewProps> = ({ pair, t }) => {
+export const CompareView: React.FC<CompareViewProps> = ({ 
+  pair, 
+  t,
+  hoveredIssueId,
+  activeIssueId,
+  onIssueHover,
+  onIssueClick
+}) => {
   // Initialize from LocalStorage or responsive default
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => {
     const saved = localStorage.getItem('vision_lqa_layout');
@@ -144,76 +155,103 @@ export const CompareView: React.FC<CompareViewProps> = ({ pair, t }) => {
         >
           
           {/* Source Image Card */}
-          <div 
-            className="flex-col flex-shrink-0 transition-all duration-300 ease-out relative" 
-            style={{ width: `${currentImageWidth}px` }}
-          >
-             {/* Floating Badge: Source */}
-            <div className="absolute -top-3 left-4 z-10 flex items-center gap-2 max-w-[calc(100%-2rem)]">
-                <div className="bg-slate-700 text-white px-3 py-1 rounded shadow-lg text-xs font-bold tracking-wide flex items-center border border-slate-600 shrink-0">
-                    <span className="opacity-75 mr-1.5 font-normal uppercase">{t.source}</span>
-                    <span>en-US</span>
-                </div>
-                {/* Filename Badge */}
-                <div className="bg-white/90 backdrop-blur text-slate-700 px-2 py-1 rounded shadow-sm text-[11px] font-medium border border-slate-300/80 truncate min-w-0" title={pair.fileName}>
-                    {pair.fileName}
-                </div>
+          <div className="flex items-start gap-3 flex-shrink-0 transition-all duration-300 ease-out">
+            {/* Vertical Label - Sticky so it stays visible on tall images */}
+            <div 
+                className="bg-slate-700 text-white py-3 px-1.5 rounded shadow-sm text-xs font-bold tracking-wide flex items-center border border-slate-600 shrink-0 sticky top-8 z-10"
+                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+            >
+                <span className="opacity-75 mb-1.5 font-normal uppercase">{t.source}</span>
+                <span>en-US</span>
             </div>
 
-            <div className="relative bg-white shadow-xl rounded-lg overflow-hidden group border border-slate-300">
-              <img src={pair.enImageUrl} alt="en-US" className="w-full h-auto block" />
-              <div className="absolute inset-0 border-2 border-transparent group-hover:border-slate-400 pointer-events-none transition-colors"></div>
+            <div className="flex-col relative" style={{ width: `${currentImageWidth}px` }}>
+                {/* Filename Badge - Moved above the image */}
+                <div className="absolute bottom-full mb-2 left-0 z-10 max-w-full">
+                    <div className="bg-white/90 backdrop-blur text-slate-700 px-2 py-1 rounded shadow-sm text-[11px] font-medium border border-slate-300/80 truncate" title={pair.fileName}>
+                        {pair.fileName}
+                    </div>
+                </div>
+
+                <div className="relative bg-white shadow-xl rounded-lg overflow-hidden group border border-slate-300">
+                  <img src={pair.enImageUrl} alt="en-US" className="w-full h-auto block" />
+                  <div className="absolute inset-0 border-2 border-transparent group-hover:border-slate-400 pointer-events-none transition-colors"></div>
+                </div>
             </div>
           </div>
 
           {/* Visual Separator for Vertical Mode */}
           {isVertical && (
-              <div className="text-slate-400 animate-bounce">
+              <div className="text-slate-400 animate-bounce py-4">
                   <ArrowDown className="w-6 h-6" />
               </div>
           )}
 
           {/* Target Language Card */}
-          <div 
-            className="flex-col flex-shrink-0 transition-all duration-300 ease-out relative" 
-            style={{ width: `${currentImageWidth}px` }}
-          >
-            {/* Floating Badge: Target - Dynamically moves with the image */}
-            <div className="absolute -top-3 left-4 z-10 flex items-center gap-2 max-w-[calc(100%-2rem)]">
-                <div className="bg-purple-600 text-white px-3 py-1 rounded shadow-lg text-xs font-bold tracking-wide flex items-center border border-purple-500 shrink-0">
-                    <span className="opacity-75 mr-1.5 font-normal uppercase">{t.target}</span>
-                    <span>{targetLabel}</span>
-                </div>
-                {/* Filename Badge */}
-                <div className="bg-white/90 backdrop-blur text-slate-700 px-2 py-1 rounded shadow-sm text-[11px] font-medium border border-slate-300/80 truncate min-w-0" title={pair.fileName}>
-                    {pair.fileName}
-                </div>
+          <div className="flex items-start gap-3 flex-shrink-0 transition-all duration-300 ease-out">
+            {/* Vertical Label - Sticky */}
+            <div 
+                className="bg-purple-600 text-white py-3 px-1.5 rounded shadow-sm text-xs font-bold tracking-wide flex items-center border border-purple-500 shrink-0 sticky top-8 z-10"
+                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+            >
+                <span className="opacity-75 mb-1.5 font-normal uppercase">{t.target}</span>
+                <span>{targetLabel}</span>
             </div>
 
-            <div className="relative bg-white shadow-xl rounded-lg overflow-hidden group border border-slate-300">
-              <img src={pair.deImageUrl} alt={targetLabel} className="w-full h-auto block" />
-              <div className="absolute inset-0 border-2 border-transparent group-hover:border-purple-500 pointer-events-none transition-colors"></div>
-              
-              {/* Issues Overlay */}
-              {pair.report?.issues?.map(issue => (
-                issue.boundingBox && (
-                  <div 
-                    key={issue.id}
-                    className={`absolute border-2 ${issue.severity === 'Critical' ? 'border-red-500 bg-red-500/10' : 'border-orange-400 bg-orange-400/10'}`}
-                    style={{
-                      left: `${issue.boundingBox.x * 100}%`,
-                      top: `${issue.boundingBox.y * 100}%`,
-                      width: `${issue.boundingBox.width * 100}%`,
-                      height: `${issue.boundingBox.height * 100}%`
-                    }}
-                    title={issue.description}
-                  >
-                    <span className="absolute -top-5 left-0 text-[10px] bg-red-600 text-white px-1 rounded shadow-sm whitespace-nowrap z-10 font-mono">
-                      {issue.id}
-                    </span>
-                  </div>
-                )
-              ))}
+            <div className="flex-col relative" style={{ width: `${currentImageWidth}px` }}>
+                {/* Filename Badge - Moved above the image */}
+                <div className="absolute bottom-full mb-2 left-0 z-10 max-w-full">
+                    <div className="bg-white/90 backdrop-blur text-slate-700 px-2 py-1 rounded shadow-sm text-[11px] font-medium border border-slate-300/80 truncate" title={pair.fileName}>
+                        {pair.fileName}
+                    </div>
+                </div>
+
+                <div className="relative bg-white shadow-xl rounded-lg overflow-hidden group border border-slate-300">
+                  <img src={pair.deImageUrl} alt={targetLabel} className="w-full h-auto block" />
+                  <div className="absolute inset-0 border-2 border-transparent group-hover:border-purple-500 pointer-events-none transition-colors"></div>
+                  
+                  {/* Issues Overlay */}
+                  {pair.report?.issues?.map(issue => {
+                    if (!issue.boundingBox) return null;
+                    
+                    const isHovered = hoveredIssueId === issue.id;
+                    const isActive = activeIssueId === issue.id;
+                    const isHighlighted = isHovered || isActive;
+                    
+                    // Dimming logic: if ANY issue is highlighted, dim the others
+                    const anyHighlighted = hoveredIssueId !== null || activeIssueId !== null;
+                    const shouldDim = anyHighlighted && !isHighlighted;
+                    
+                    return (
+                      <div 
+                        key={issue.id}
+                        onClick={() => onIssueClick(isActive ? null : issue.id)}
+                        onMouseEnter={() => onIssueHover(issue.id)}
+                        onMouseLeave={() => onIssueHover(null)}
+                        className={`absolute border-2 cursor-pointer transition-all duration-300 ease-in-out z-20
+                          ${issue.severity === 'Critical' ? 'border-red-500' : 'border-orange-400'}
+                          ${isHighlighted ? (issue.severity === 'Critical' ? 'bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-orange-400/30 shadow-[0_0_15px_rgba(249,115,22,0.5)]') : (issue.severity === 'Critical' ? 'bg-red-500/10' : 'bg-orange-400/10')}
+                          ${shouldDim ? 'opacity-20 grayscale' : 'opacity-100'}
+                          ${isHighlighted ? 'animate-pulse' : ''}
+                        `}
+                        style={{
+                          left: `${issue.boundingBox.x * 100}%`,
+                          top: `${issue.boundingBox.y * 100}%`,
+                          width: `${issue.boundingBox.width * 100}%`,
+                          height: `${issue.boundingBox.height * 100}%`
+                        }}
+                        title={issue.description}
+                      >
+                        <span className={`absolute -top-6 left-0 text-[11px] text-white px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap z-30 font-mono transition-transform duration-200
+                          ${issue.severity === 'Critical' ? 'bg-red-600' : 'bg-orange-500'}
+                          ${isHighlighted ? 'scale-110 -translate-y-1' : 'scale-100'}
+                        `}>
+                          {issue.id}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
             </div>
           </div>
         </div>

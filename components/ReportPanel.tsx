@@ -11,6 +11,10 @@ interface ReportPanelProps {
   isGenerating: boolean;
   glossary: string;
   t: any; // Translation object
+  hoveredIssueId: string | null;
+  activeIssueId: string | null;
+  onIssueHover: (id: string | null) => void;
+  onIssueClick: (id: string | null) => void;
 }
 
 // --- JIRA Generator Logic ---
@@ -59,7 +63,17 @@ ${issue.description}
   return { title, description };
 };
 
-export const ReportPanel: React.FC<ReportPanelProps> = ({ pair, onGenerate, isGenerating, glossary, t }) => {
+export const ReportPanel: React.FC<ReportPanelProps> = ({ 
+  pair, 
+  onGenerate, 
+  isGenerating, 
+  glossary, 
+  t,
+  hoveredIssueId,
+  activeIssueId,
+  onIssueHover,
+  onIssueClick
+}) => {
   const [isExporting, setIsExporting] = useState(false);
   const [bugModalData, setBugModalData] = useState<JiraData | null>(null);
 
@@ -303,6 +317,10 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({ pair, onGenerate, isGe
                   issue={issue} 
                   targetLang={targetLangShort} 
                   onCreateBug={() => openBugModal(issue)}
+                  isHovered={hoveredIssueId === issue.id}
+                  isActive={activeIssueId === issue.id}
+                  onHover={onIssueHover}
+                  onClick={onIssueClick}
                 />
               ))}
               {report.issues.length === 0 && (
@@ -386,8 +404,12 @@ const BugPreviewModal: React.FC<{ data: JiraData; onClose: () => void }> = ({ da
 const IssueCard: React.FC<{ 
   issue: QaIssue, 
   targetLang: string, 
-  onCreateBug: () => void 
-}> = ({ issue, targetLang, onCreateBug }) => {
+  onCreateBug: () => void,
+  isHovered: boolean,
+  isActive: boolean,
+  onHover: (id: string | null) => void,
+  onClick: (id: string | null) => void
+}> = ({ issue, targetLang, onCreateBug, isHovered, isActive, onHover, onClick }) => {
   const getSeverityColor = (sev: string) => {
     switch(sev) {
       case 'Critical': return 'border-l-red-500 bg-red-50/50';
@@ -403,7 +425,16 @@ const IssueCard: React.FC<{
   };
 
   return (
-    <div className={`p-3 rounded border border-slate-200 border-l-4 ${getSeverityColor(issue.severity)} shadow-sm relative group`}>
+    <div 
+      className={`p-3 rounded border border-l-4 shadow-sm relative group cursor-pointer transition-all duration-300
+        ${getSeverityColor(issue.severity)}
+        ${isHovered || isActive ? 'border-blue-400 ring-2 ring-blue-200/50 shadow-md scale-[1.01]' : 'border-slate-200'}
+        ${isActive ? 'bg-blue-50/30' : ''}
+      `}
+      onMouseEnter={() => onHover(issue.id)}
+      onMouseLeave={() => onHover(null)}
+      onClick={() => onClick(isActive ? null : issue.id)}
+    >
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center space-x-2">
           {getIcon(issue.severity)}

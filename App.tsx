@@ -24,6 +24,8 @@ const App: React.FC = () => {
 
   const [pairs, setPairs] = useState<ScreenshotPair[]>([]);
   const [selectedPairId, setSelectedPairId] = useState<string | null>(null);
+  const [hoveredIssueId, setHoveredIssueId] = useState<string | null>(null);
+  const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
   const [glossaryText, setGlossaryText] = useState<string>('');
   const [glossaryDetectedLang, setGlossaryDetectedLang] = useState<'de-DE' | 'fr-FR' | null>(null);
   
@@ -635,7 +637,14 @@ const App: React.FC = () => {
         </button>
 
         <section className="flex-1 relative bg-slate-200 overflow-hidden flex flex-col min-w-0">
-          <CompareView pair={selectedPair} t={t} />
+          <CompareView 
+            pair={selectedPair} 
+            t={t} 
+            hoveredIssueId={hoveredIssueId}
+            activeIssueId={activeIssueId}
+            onIssueHover={setHoveredIssueId}
+            onIssueClick={setActiveIssueId}
+          />
         </section>
 
         {/* Resizer Handle */}
@@ -665,6 +674,10 @@ const App: React.FC = () => {
                 isGenerating={selectedPair?.status === 'analyzing'}
                 glossary={glossaryText}
                 t={t}
+                hoveredIssueId={hoveredIssueId}
+                activeIssueId={activeIssueId}
+                onIssueHover={setHoveredIssueId}
+                onIssueClick={setActiveIssueId}
               />
             )}
           </Suspense>
