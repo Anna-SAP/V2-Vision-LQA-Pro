@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScreenshotPair, QaIssue, ScreenshotReport } from '../types';
 import { Button } from './Button';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
-import { AlertTriangle, AlertOctagon, Info, Download, RefreshCw, AlertCircle, FileText, Loader2, Bug, Copy, Check, X } from 'lucide-react';
+import { AlertTriangle, AlertOctagon, Info, Download, RefreshCw, AlertCircle, FileText, Loader2, Bug, Copy, Check, X, Lightbulb } from 'lucide-react';
 import { generateReportHtml, determineStrictQuality, generateExportFilename } from '../services/reportGenerator';
 
 interface ReportPanelProps {
@@ -54,6 +54,9 @@ ${issue.targetText || '(No text)'}
 
 *Suggested Translation:*
 ${issue.suggestionsTarget?.join('\n') || 'N/A'}
+
+*Why fix this?*
+${issue.suggestionRationale || 'N/A'}
 
 *Issue Detail:*
 ${issue.description}
@@ -487,6 +490,16 @@ const IssueCard: React.FC<{
             </ul>
          )}
       </div>
+
+      {/* New Rationale Section */}
+      {issue.suggestionRationale && (
+        <div className="mt-2 p-2 bg-amber-50 border border-amber-100 rounded text-xs text-amber-800 flex items-start">
+          <Lightbulb className="w-3 h-3 mr-1.5 mt-0.5 shrink-0" />
+          <span>
+            <strong>Why fix this?</strong> {issue.suggestionRationale}
+          </span>
+        </div>
+      )}
     </div>
   );
 };

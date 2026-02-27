@@ -302,6 +302,15 @@ ${termRulesZh}
 - 只有在无法缩短时，才建议“允许换行”或“增加宽度”。
 - 绝不允许“建议”字段为空。
 
+**CRITICAL RULE - FIXING RATIONALE (修复理由)**:
+- 你正在为非母语开发者提供建议。对于每一个问题，你**必须**提供一个 'suggestionRationale'。
+- 解释如果不修复这个 Bug 会带来的**影响 (IMPACT)**。
+- 示例：
+  - "德国用户会认为这具有冒犯性。" (文化)
+  - "这个文本长度会破坏移动端布局。" (技术)
+  - "ISO 8601 标准要求使用此日期格式。" (标准)
+  - "轻微的风格偏好，优先级低。" (低严重度)
+
 **术语来源追溯 (Glossary Source Tracing)**：
 - 术语表数据中每条术语末尾附有 \`[source: 文件名]\` 标签，例如：\`Company greeting = Begrüßung des Unternehmens [source: terms_en_de-DE_2025.csv]\`。
 - 当你判定一个问题属于 **Terminology** 类别时，**必须**将该术语匹配到的来源文件名填入 \`glossarySource\` 字段。
@@ -324,6 +333,15 @@ You need to inspect the **VALID AREAS** from two perspectives:
 - For "Visual Truncation" issues, your PRIMARY job is to suggest a SHORTER TRANSLATION (abbreviation or synonym) to fit the space.
 - Only suggest "allow wrapping" or "increase width" if no shorter text is possible.
 - The 'suggestionsTarget' field MUST NEVER BE EMPTY.
+
+**CRITICAL RULE - FIXING RATIONALE**:
+- You are advising a non-native developer. For every issue, you MUST provide a 'suggestionRationale'.
+- Explain the IMPACT of the bug if left unfixed.
+- Examples:
+  - "German users will find this offensive." (Cultural)
+  - "This text length breaks the mobile layout." (Technical)
+  - "ISO 8601 requires this date format." (Standard)
+  - "Minor style preference, low priority." (Low Severity)
 
 **GLOSSARY SOURCE TRACING**:
 - Each term in the glossary data has a \`[source: filename]\` tag appended, e.g., \`Company greeting = Begrüßung des Unternehmens [source: terms_en_de-DE_2025.csv]\`.

@@ -27,6 +27,10 @@ const qaIssueSchema: Schema = {
     sourceText: { type: Type.STRING },
     targetText: { type: Type.STRING },
     description: { type: Type.STRING, description: "Detailed explanation of the issue" },
+    suggestionRationale: {
+      type: Type.STRING,
+      description: "A short, persuasive explanation for the developer (non-native speaker) on WHY this must be fixed. E.g., 'Critical for legal compliance', 'Prevents UI breakage', or 'Standard industry convention'."
+    },
     suggestionsTarget: { 
       type: Type.ARRAY, 
       items: { type: Type.STRING },
@@ -41,7 +45,7 @@ const qaIssueSchema: Schema = {
       description: "REQUIRED for Terminology issues. Must match the [ID:TERM-xxx] tag from the glossary context exactly. If not found, set to null."
     }
   },
-  required: ["id", "location", "issueCategory", "severity", "description", "suggestionsTarget"]
+  required: ["id", "location", "issueCategory", "severity", "description", "suggestionRationale", "suggestionsTarget"]
 };
 
 const scoresSchema: Schema = {
@@ -109,7 +113,8 @@ const verificationSchema: Schema = {
           id: { type: Type.STRING, description: "The Issue ID from the input list" },
           isValid: { type: Type.BOOLEAN, description: "True if the issue is a real bug; False if it is a hallucination or negligible" },
           reason: { type: Type.STRING, description: "Brief explanation for the verdict" },
-          refinedSeverity: { type: Type.STRING, description: "Optional: Suggest a more accurate severity if needed" }
+          refinedSeverity: { type: Type.STRING, description: "Optional: Suggest a more accurate severity if needed" },
+          refinedRationale: { type: Type.STRING, description: "Optional: Suggest a better explanation of WHY this must be fixed" }
         },
         required: ["id", "isValid", "reason"]
       }
@@ -347,6 +352,9 @@ Please verify each issue and return the verdict.
         }
         if (verdict.refinedSeverity) {
           issue.severity = verdict.refinedSeverity as any;
+        }
+        if (verdict.refinedRationale) {
+          issue.suggestionRationale = verdict.refinedRationale;
         }
       }
       return true;

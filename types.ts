@@ -28,6 +28,7 @@ export interface QaIssue {
   sourceText: string;
   targetText: string;
   description: string; // Renamed from descriptionZh
+  suggestionRationale: string; // Explanation of WHY this fix is needed
   suggestionsTarget: string[];
   glossarySource?: string; // Which glossary file this terminology issue was matched against
   glossaryTermId?: string; // Unique ID (e.g. TERM-001) for strict hallucination prevention

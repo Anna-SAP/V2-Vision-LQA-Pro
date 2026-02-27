@@ -398,6 +398,12 @@ export const generateReportHtml = (
             <span class="suggestion-label">Suggestion</span>
             <div class="suggestion-content">${issue.suggestionsTarget?.join('<br/>') || '-'}</div>
         </div>
+        ${issue.suggestionRationale ? `
+        <div class="suggestion-box" style="margin-top: 8px; background: #fffbeb; border-color: #fef3c7;">
+            <span class="suggestion-label" style="color: #92400e;">Why fix this?</span>
+            <div class="suggestion-content" style="color: #92400e;">${issue.suggestionRationale}</div>
+        </div>
+        ` : ''}
       </div>
     `).join('');
 
