@@ -97,6 +97,27 @@ const reportResponseSchema: Schema = {
   required: ["overall", "issues", "summary"]
 };
 
+// --- NEW: Verification Schema for Self-Correction Loop ---
+const verificationSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    verifiedIssues: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING, description: "The Issue ID from the input list" },
+          isValid: { type: Type.BOOLEAN, description: "True if the issue is a real bug; False if it is a hallucination or negligible" },
+          reason: { type: Type.STRING, description: "Brief explanation for the verdict" },
+          refinedSeverity: { type: Type.STRING, description: "Optional: Suggest a more accurate severity if needed" }
+        },
+        required: ["id", "isValid", "reason"]
+      }
+    }
+  },
+  required: ["verifiedIssues"]
+};
+
 // Helper to convert URL (Blob or Remote) to Base64 data and mime type
 async function processImageUrl(url: string): Promise<ProcessedImage> {
   try {
@@ -205,6 +226,91 @@ const sanitizeReport = (report: ScreenshotReport, glossaryText: string | undefin
   }
 };
 
+// --- NEW: Verifier Agent for Self-Correction Loop ---
+async function verifyIssues(
+  payload: LlmRequestPayload,
+  initialReport: ScreenshotReport,
+  enImage: ProcessedImage,
+  deImage: ProcessedImage,
+  ai: GoogleGenAI
+): Promise<ScreenshotReport> {
+  const systemPrompt = `
+Role: You are a strict QA Lead reviewing a bug report submitted by a junior tester.
+Task: Carefully compare the screenshots (Source vs Target) and the provided list of issues.
+Rules:
+1. Layout Issues: Only mark isValid: true if text is truly overlapping, truncated, or clearly misaligned. If it's just compact but readable, mark isValid: false.
+2. Terminology Issues: If there is no explicit conflict with the glossary, or the context justifies the translation, mark isValid: false.
+3. Translation Issues: Ignore style preferences. Focus only on objective errors.
+  `;
+
+  const userPrompt = `
+Initial Issues List (JSON):
+${JSON.stringify(initialReport.issues, null, 2)}
+
+Target Language: ${payload.targetLanguage}
+Glossary Context: ${payload.glossaryText || 'None'}
+
+Please verify each issue and return the verdict.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: LLM_MODEL_ID,
+      contents: {
+        parts: [
+          { inlineData: { mimeType: enImage.mimeType, data: enImage.data } },
+          { inlineData: { mimeType: deImage.mimeType, data: deImage.data } },
+          { text: userPrompt }
+        ]
+      },
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        responseSchema: verificationSchema,
+        temperature: 0.1, // Very low temperature for strict verification
+      }
+    });
+
+    const responseText = response.text;
+    if (!responseText) {
+      console.warn("[Verifier] Returned empty response. Falling back to initial report.");
+      return initialReport;
+    }
+
+    const cleanedText = responseText.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+    const verificationResult = JSON.parse(cleanedText);
+
+    const verifiedIssuesMap = new Map<string, any>();
+    if (verificationResult.verifiedIssues && Array.isArray(verificationResult.verifiedIssues)) {
+      verificationResult.verifiedIssues.forEach((v: any) => {
+        verifiedIssuesMap.set(v.id, v);
+      });
+    }
+
+    const filteredIssues = initialReport.issues.filter(issue => {
+      const verdict = verifiedIssuesMap.get(issue.id);
+      if (verdict) {
+        if (!verdict.isValid) {
+          console.log(`[Verifier] Removed Issue ${issue.id} (${issue.issueCategory}): ${verdict.reason}`);
+          return false;
+        }
+        if (verdict.refinedSeverity) {
+          issue.severity = verdict.refinedSeverity as any;
+        }
+      }
+      return true;
+    });
+
+    initialReport.issues = filteredIssues;
+    return initialReport;
+
+  } catch (error) {
+    console.error("[Verifier] Agent failed:", error);
+    // Fallback to initial report on failure
+    return initialReport;
+  }
+}
+
 export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<LlmResponse> {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -296,6 +402,12 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
       
       // Fallback: Ensure issues array exists
       if (!parsedReport.issues) parsedReport.issues = [];
+
+      // --- NEW: Self-Correction Loop (Verifier Agent) ---
+      if (parsedReport.issues.length > 0) {
+        console.log(`[Verifier] Starting verification for ${parsedReport.issues.length} issues...`);
+        parsedReport = await verifyIssues(payload, parsedReport, enImage, deImage, ai);
+      }
 
       // FORCE STRICT QUALITY GRADING
       // This ensures the data state is consistent with what the UI displays.
