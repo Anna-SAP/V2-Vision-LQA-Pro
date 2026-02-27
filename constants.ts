@@ -1,7 +1,8 @@
 import { SupportedLocale, AppLanguage } from "./types";
 
-export const LLM_MODEL_ID = 'gemini-3-flash-preview';
-export const LLM_DISPLAY_NAME = 'Gemini 3 Flash';
+export const LLM_MODEL_ID = 'gemini-3.1-pro-preview';
+export const LLM_FALLBACK_MODEL_ID = 'gemini-2.0-flash';
+export const LLM_DISPLAY_NAME = 'Gemini 3.1 Pro';
 export const APP_VERSION = 'v1.7.0'; // Bump version for Glossary Auto-Load
 
 // UI Translations
