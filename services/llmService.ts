@@ -232,15 +232,30 @@ async function verifyIssues(
   initialReport: ScreenshotReport,
   enImage: ProcessedImage,
   deImage: ProcessedImage,
-  ai: GoogleGenAI
+  ai: GoogleGenAI,
+  skillsContext: string
 ): Promise<ScreenshotReport> {
   const systemPrompt = `
-Role: You are a strict QA Lead reviewing a bug report submitted by a junior tester.
-Task: Carefully compare the screenshots (Source vs Target) and the provided list of issues.
+Role: You are a Senior LQA Specialist conducting a peer review.
+Context: You have access to the specific 'LQA Skills' used to generate the initial report.
+
+Task: Verify the reported issues against the Screenshots and the Skills.
+
 Rules:
-1. Layout Issues: Only mark isValid: true if text is truly overlapping, truncated, or clearly misaligned. If it's just compact but readable, mark isValid: false.
-2. Terminology Issues: If there is no explicit conflict with the glossary, or the context justifies the translation, mark isValid: false.
-3. Translation Issues: Ignore style preferences. Focus only on objective errors.
+1. Layout Issues: 
+   - OVERLAP/TRUNCATION: Must be marked isValid: true.
+   - SPACING/ALIGNMENT: If the issue violates a specific LQA Skill (e.g., "nav_truncation_priority"), mark isValid: true. 
+   - IF MERELY COMPACT: Do NOT reject. Instead, mark isValid: true but suggest refining severity to 'Minor'.
+
+2. Terminology/Translation:
+   - GLOSSARY: Strict adherence. If it contradicts glossary, isValid: true.
+   - STYLE: If the translation sounds robotic or violates 'politeness_register' skill, isValid: true.
+
+3. Hallucination Check:
+   - Only mark isValid: false if the issue describes something visible that clearly DOES NOT EXIST in the image (e.g., complaining about a button that isn't there).
+
+LQA SKILLS REFERENCE:
+${skillsContext}
   `;
 
   const userPrompt = `
@@ -267,7 +282,7 @@ Please verify each issue and return the verdict.
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
         responseSchema: verificationSchema,
-        temperature: 0.1, // Very low temperature for strict verification
+        temperature: 0.2, // Slightly higher temperature for style sensitivity
       }
     });
 
@@ -291,6 +306,16 @@ Please verify each issue and return the verdict.
       const verdict = verifiedIssuesMap.get(issue.id);
       if (verdict) {
         if (!verdict.isValid) {
+          const reasonLower = (verdict.reason || '').toLowerCase();
+          const isHallucination = reasonLower.includes('hallucination') || reasonLower.includes('not visible') || reasonLower.includes('does not exist');
+          
+          if ((issue.issueCategory === 'Style' || issue.issueCategory === 'Formatting') && !isHallucination) {
+            console.log(`[Verifier] Rescued Issue ${issue.id} (${issue.issueCategory}): Downgrading to Minor. Reason: ${verdict.reason}`);
+            issue.severity = 'Minor';
+            issue.description = `[Review: Minor] ${issue.description}`;
+            return true;
+          }
+          
           console.log(`[Verifier] Removed Issue ${issue.id} (${issue.issueCategory}): ${verdict.reason}`);
           return false;
         }
@@ -406,7 +431,7 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
       // --- NEW: Self-Correction Loop (Verifier Agent) ---
       if (parsedReport.issues.length > 0) {
         console.log(`[Verifier] Starting verification for ${parsedReport.issues.length} issues...`);
-        parsedReport = await verifyIssues(payload, parsedReport, enImage, deImage, ai);
+        parsedReport = await verifyIssues(payload, parsedReport, enImage, deImage, ai, skillsBlock);
       }
 
       // FORCE STRICT QUALITY GRADING
