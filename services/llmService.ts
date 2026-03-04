@@ -195,31 +195,58 @@ async function retryWithBackoff<T>(
 const sanitizeReport = (report: ScreenshotReport, glossaryText: string | undefined) => {
   if (!glossaryText) return;
   
-  // Create a set of valid IDs present in the glossary text
-  // Looking for pattern [ID:TERM-xxx]
-  const validIds = new Set<string>();
-  const matches = glossaryText.match(/\[ID:TERM-\d+\]/g);
-  if (matches) {
-    matches.forEach(id => validIds.add(id)); // e.g., "[ID:TERM-001]"
-  }
+  // Create a map of valid IDs to their source files
+  // Looking for pattern [ID:TERM-xxx] ... [source: filename]
+  const validIdsMap = new Map<string, string>();
+  const lines = glossaryText.split('\n');
+  lines.forEach(line => {
+    const idMatch = line.match(/\[ID:(TERM-\d+)\]/);
+    const sourceMatch = line.match(/\[source:\s*(.+?)\]/);
+    if (idMatch) {
+      const id = `[ID:${idMatch[1]}]`;
+      const source = sourceMatch ? sourceMatch[1].trim() : 'Unknown Source';
+      validIdsMap.set(id, source);
+    }
+  });
 
   report.issues.forEach(issue => {
     if (issue.issueCategory === 'Terminology') {
       
-      const termIdRaw = issue.glossaryTermId; // e.g. "TERM-001"
-      const formattedId = termIdRaw ? `[ID:${termIdRaw}]` : null;
+      const termIdRaw = issue.glossaryTermId; // e.g. "TERM-001", "[ID:TERM-001]", or "001"
+      let formattedId = null;
+      if (termIdRaw) {
+        // Extract the TERM-xxx part if it's wrapped in [ID:...]
+        const match = termIdRaw.match(/TERM-\d+/);
+        if (match) {
+          formattedId = `[ID:${match[0]}]`;
+        } else {
+          // If it's just a number, prefix it with TERM-
+          const numMatch = termIdRaw.match(/\d+/);
+          if (numMatch) {
+            formattedId = `[ID:TERM-${numMatch[0]}]`;
+          } else {
+            formattedId = `[ID:${termIdRaw}]`;
+          }
+        }
+      }
       
-      const isValid = formattedId && validIds.has(formattedId);
+      const isValid = formattedId && validIdsMap.has(formattedId);
 
       if (!isValid) {
         // Hallucination detected
         console.warn(`[Hallucination Guard] Downgrading Terminology issue ${issue.id} - Invalid ID: ${termIdRaw}`);
-        issue.issueCategory = 'Style'; // Downgrade to Style
+        issue.issueCategory = 'Terminology'; // Keep it as Terminology, just mark it as Auto-Downgraded
         issue.severity = 'Minor';
         issue.description = `[Auto-Downgraded] ${issue.description} (Reason: Terminology ID not found in glossary)`;
         // Clear the fake ID
         issue.glossaryTermId = undefined;
         issue.glossarySource = 'LLM Knowledge (Downgraded)';
+      } else {
+        // Valid ID! Ensure the glossarySource is correct
+        const correctSource = validIdsMap.get(formattedId!);
+        if (!issue.glossarySource || issue.glossarySource === 'LLM Knowledge' || issue.glossarySource !== correctSource) {
+          issue.glossarySource = correctSource;
+        }
       }
     }
   });
