@@ -84,6 +84,7 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [bugModalData, setBugModalData] = useState<JiraData | null>(null);
+  const [showRemovedIssues, setShowRemovedIssues] = useState(false);
 
   if (!pair) {
     return (
@@ -143,9 +144,28 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
   const scores = report.overall.scores;
   
   const validIssues = report.issues.filter(i => i._meetsConsensus !== false);
+  const autoRemovedIssues = report.issues.filter(i => i._meetsConsensus === false);
   
   // Calculate strict quality for UI display (overriding LLM generic level if needed)
   const strictQuality = determineStrictQuality(report);
+
+  let removedSummaryText = "";
+  if (autoRemovedIssues.length > 0) {
+    if (autoRemovedIssues.length === 1) {
+      removedSummaryText = "1 issue removed by consensus (1/3)";
+    } else {
+      const categoryCounts = autoRemovedIssues.reduce((acc, issue) => {
+        acc[issue.issueCategory] = (acc[issue.issueCategory] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      const categoryStrings = Object.entries(categoryCounts)
+        .map(([cat, count]) => `${count} ${cat}`)
+        .join(', ');
+        
+      removedSummaryText = `${autoRemovedIssues.length} issues removed by consensus (1/3) — ${categoryStrings}`;
+    }
+  }
 
   const radarData = [
     { subject: 'Accuracy', A: scores?.accuracy || 0, fullMark: 5 },
@@ -338,7 +358,7 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
             </div>
             
             <div className="space-y-4 pb-4">
-              {report.issues.map((issue) => (
+              {validIssues.map((issue) => (
                 <IssueCard 
                   key={issue.id} 
                   issue={issue} 
@@ -350,8 +370,38 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
                   onClick={onIssueClick}
                 />
               ))}
-              {report.issues.length === 0 && (
+              {validIssues.length === 0 && (
                 <p className="text-center text-slate-400 text-sm py-4">{t.noIssues}</p>
+              )}
+
+              {autoRemovedIssues.length > 0 && (
+                <>
+                  <div 
+                    className={`removed-issues-summary ${showRemovedIssues ? 'expanded' : ''}`}
+                    onClick={() => setShowRemovedIssues(!showRemovedIssues)}
+                  >
+                    <span className="removed-icon">🗑️</span>
+                    <span>{removedSummaryText}</span>
+                    <span className="toggle-arrow">▶</span>
+                  </div>
+                  
+                  {showRemovedIssues && (
+                    <div className="removed-issues-detail space-y-4 mt-4">
+                      {autoRemovedIssues.map((issue) => (
+                        <IssueCard 
+                          key={issue.id} 
+                          issue={issue} 
+                          targetLang={targetLangShort} 
+                          onCreateBug={() => openBugModal(issue)}
+                          isHovered={hoveredIssueId === issue.id}
+                          isActive={activeIssueId === issue.id}
+                          onHover={onIssueHover}
+                          onClick={onIssueClick}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
