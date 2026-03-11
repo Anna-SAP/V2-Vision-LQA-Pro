@@ -118,7 +118,7 @@ async function retryWithBackoff<T>(
     return await fn();
   } catch (error) {
     if (retries === 0) throw error;
-    console.warn(\`LLM Call failed, retrying in \${delay}ms... (\${retries} left). Error:\`, error);
+    console.warn(`LLM Call failed, retrying in ${delay}ms... (${retries} left). Error:`, error);
     await new Promise(resolve => setTimeout(resolve, delay));
     return retryWithBackoff(fn, retries - 1, delay * 2);
   }
@@ -137,13 +137,13 @@ const sanitizeReport = (report: any, glossaryText: string | undefined) => {
   report.issues.forEach((issue: any) => {
     if (issue.issueCategory === 'Terminology') {
       const termIdRaw = issue.glossaryTermId;
-      const formattedId = termIdRaw ? \`[ID:\${termIdRaw}]\` : null;
+      const formattedId = termIdRaw ? `[ID:${termIdRaw}]` : null;
       const isValid = formattedId && validIds.has(formattedId);
 
       if (!isValid) {
         issue.issueCategory = 'Style';
         issue.severity = 'Minor';
-        issue.description = \`[Auto-Downgraded] \${issue.description} (Reason: Terminology ID not found in glossary)\`;
+        issue.description = `[Auto-Downgraded] ${issue.description} (Reason: Terminology ID not found in glossary)`;
         issue.glossaryTermId = undefined;
         issue.glossarySource = 'LLM Knowledge (Downgraded)';
       }
@@ -165,7 +165,7 @@ async function verifyIssues(
   ai: GoogleGenAI,
   skillsContext: string
 ): Promise<any> {
-  const systemPrompt = \`
+  const systemPrompt = `
 Role: You are a Senior LQA Specialist conducting a peer review.
 Context: You have access to the specific 'LQA Skills' used to generate the initial report.
 
@@ -185,18 +185,18 @@ Rules:
    - Only mark isValid: false if the issue describes something visible that clearly DOES NOT EXIST in the image (e.g., complaining about a button that isn't there).
 
 LQA SKILLS REFERENCE:
-\${skillsContext}
-  \`;
+${skillsContext}
+  `;
 
-  const userPrompt = \`
+  const userPrompt = `
 Initial Issues List (JSON):
-\${JSON.stringify(initialReport.issues, null, 2)}
+${JSON.stringify(initialReport.issues, null, 2)}
 
-Target Language: \${payload.targetLanguage}
-Glossary Context: \${payload.glossaryText || 'None'}
+Target Language: ${payload.targetLanguage}
+Glossary Context: ${payload.glossaryText || 'None'}
 
 Please verify each issue and return the verdict.
-  \`;
+  `;
 
   try {
     const response = await ai.models.generateContent({
@@ -219,7 +219,7 @@ Please verify each issue and return the verdict.
     const responseText = response.text;
     if (!responseText) return initialReport;
 
-    const cleanedText = responseText.replace(/\`\`\`json\\s*/g, '').replace(/\`\`\`\\s*$/g, '').trim();
+    const cleanedText = responseText.replace(new RegExp('```json\\s*', 'g'), '').replace(new RegExp('```\\s*$', 'g'), '').trim();
     const verificationResult = JSON.parse(cleanedText);
 
     const verifiedIssuesMap = new Map<string, any>();
@@ -238,7 +238,7 @@ Please verify each issue and return the verdict.
           
           if ((issue.issueCategory === 'Style' || issue.issueCategory === 'Formatting') && !isHallucination) {
             issue.severity = 'Minor';
-            issue.description = \`[Review: Minor] \${issue.description}\`;
+            issue.description = `[Review: Minor] ${issue.description}`;
             return true;
           }
           return false;
@@ -305,7 +305,7 @@ export const analyzeScreenshot = functions.https.onCall({
         throw new Error("Received empty response from Gemini API.");
       }
 
-      const cleanedText = responseText.replace(/\`\`\`json\\s*/g, '').replace(/\`\`\`\\s*$/g, '').trim();
+      const cleanedText = responseText.replace(new RegExp('```json\\s*', 'g'), '').replace(new RegExp('```\\s*$', 'g'), '').trim();
       let parsedReport = JSON.parse(cleanedText);
 
       parsedReport.screenshotId = payload.screenshotId;

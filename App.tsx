@@ -3,7 +3,7 @@ import { UploadArea } from './components/UploadArea';
 import { PairList } from './components/PairList';
 import { CompareView } from './components/CompareView';
 import { GlossaryManager, GlossaryManagerRef } from './components/GlossaryManager';
-import { ScreenshotPair, LlmRequestPayload, BulkProcessingState, ScreenshotReport, AppLanguage } from './types';
+import { ScreenshotPair, LlmRequestPayload, BulkProcessingState, ScreenshotReport, AppLanguage, StyleGuideRule } from './types';
 import { callTranslationQaLLM } from './services/llmService';
 import { generateReportHtml, generateExportFilename } from './services/reportGenerator';
 import { Layers, Activity, BookOpen, PanelLeftOpen, PanelLeftClose, PlayCircle, Globe, Loader2, RotateCcw, Trash2, GripVertical, BookDown } from 'lucide-react';
@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const [hoveredIssueId, setHoveredIssueId] = useState<string | null>(null);
   const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
   const [glossaryText, setGlossaryText] = useState<string>('');
+  const [styleGuideRules, setStyleGuideRules] = useState<StyleGuideRule[]>([]);
   const [glossaryDetectedLang, setGlossaryDetectedLang] = useState<'de-DE' | 'fr-FR' | null>(null);
   
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -189,7 +190,8 @@ const App: React.FC = () => {
           sourceText: "Settings",
           targetText: "Einstellungen für Benutzer",
           description: appLanguage === 'zh' ? "文本过长导致换行。" : "Text is too long causing line wrap.",
-          suggestionsTarget: ["Einstellungen"]
+          suggestionsTarget: ["Einstellungen"],
+          suggestionRationale: "This breaks the UI layout."
         }
       ],
       summary: {
@@ -259,6 +261,7 @@ const App: React.FC = () => {
         deImageBase64: pair.deImageUrl,
         targetLanguage: pair.targetLanguage,
         glossaryText,
+        styleGuideRules,
         reportLanguage: appLanguage // Pass current language
       };
 
@@ -334,6 +337,7 @@ const App: React.FC = () => {
           deImageBase64: pair.deImageUrl,
           targetLanguage: pair.targetLanguage,
           glossaryText,
+          styleGuideRules,
           reportLanguage: appLanguage // Pass current language
         };
 
@@ -598,6 +602,8 @@ const App: React.FC = () => {
               ref={glossaryManagerRef}
               currentGlossary={glossaryText}
               onUpdate={setGlossaryText}
+              styleGuideRules={styleGuideRules}
+              onStyleGuideUpdate={setStyleGuideRules}
               onLangDetected={setGlossaryDetectedLang}
               t={t}
             />

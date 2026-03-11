@@ -185,7 +185,7 @@ export const UI_TEXT = {
   }
 };
 
-export const getAnalysisSystemPrompt = (targetLang: SupportedLocale, reportLang: AppLanguage, skillsBlock?: string) => {
+export const getAnalysisSystemPrompt = (targetLang: SupportedLocale, reportLang: AppLanguage, skillsBlock?: string, styleGuideBlock?: string) => {
   const langName = targetLang === 'fr-FR' ? 'French (Français)' : 'German (Deutsch)';
   const langCode = targetLang;
   
@@ -318,6 +318,10 @@ ${termRulesZh}
 - 如果术语不属于任何已加载的术语表（即该问题基于你自身的语言知识判定），则 \`glossarySource\` 填写 "LLM Knowledge"。
 - 非 Terminology 类型的 Issue 不需要填写此字段。
 
+**Style Guide 规则追溯 (Style Guide Rule Tracing)**：
+- 如果你发现违反了 \`styleGuideRules\` 部分提供的特定 Style Guide 规则，**必须**将问题分类为 **Style**。
+- 你**必须**将 \`[RULE xxx]\` 标签中的精确 Rule ID（例如 \`FR-FR_RULE_00045\`）填入 \`styleRuleId\` 字段。
+
 注意：请忽略所有“未翻译（Untranslated）”的文本，这部分由其他团队负责。
 再次强调：**所有报告内容必须使用中文输出。**`
     : `Task Objective:
@@ -350,12 +354,20 @@ You need to inspect the **VALID AREAS** from two perspectives:
 - If the terminology issue is based on your own linguistic knowledge (not from any loaded glossary), set \`glossarySource\` to "LLM Knowledge".
 - Non-Terminology issues do not need this field.
 
+**STYLE GUIDE RULE TRACING**:
+- If you find a violation of a specific Style Guide rule provided in the \`styleGuideRules\` section, you MUST classify the issue as **Style**.
+- You MUST populate the \`styleRuleId\` field with the exact Rule ID (e.g., \`FR-FR_RULE_00045\`) from the \`[RULE xxx]\` tag.
+
 NOTE: Please IGNORE all "Untranslated" text, as this is handled by another team.
 REITERATION: **ALL REPORT CONTENT MUST BE IN ENGLISH.**`;
 
   // SkillBank Integration: inject retrieved skills between task description and evaluation dimensions
   const skillsSection = skillsBlock
     ? `\n${skillsBlock}\n`
+    : '';
+
+  const styleGuideSection = styleGuideBlock
+    ? `\n${styleGuideBlock}\n`
     : '';
 
   return `
@@ -366,9 +378,11 @@ Inputs:
 1. sourceScreenshot: en-US Interface (Source)
 2. targetScreenshot: ${langCode} Interface (Target)
 3. glossaryText (Optional): Project context/glossary strings.
+4. styleGuideRules (Optional): Official translation style rules.
 
 ${taskDesc}
 ${skillsSection}
+${styleGuideSection}
 Evaluation Dimensions (0-5 score):
 - Translation Accuracy
 - Terminology Consistency

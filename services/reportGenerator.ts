@@ -379,6 +379,8 @@ export const generateReportHtml = (
             <div>
                 <span class="issue-id">${issue.id}</span>
                 <span class="issue-cat">${issue.issueCategory}</span>
+                ${issue.issueCategory === 'Terminology' && issue.glossarySource ? `<span class="issue-cat" style="background: #f3e8ff; color: #9333ea; border-color: #e9d5ff;">📋 ${issue.glossarySource}</span>` : ''}
+                ${issue.issueCategory === 'Style' && issue.styleRuleId ? `<span class="issue-cat" style="background: #eff6ff; color: #2563eb; border-color: #bfdbfe;">📏 ${issue.styleRuleId}</span>` : ''}
             </div>
             <span class="issue-sev sev-${issue.severity.toLowerCase()}">${issue.severity}</span>
         </div>

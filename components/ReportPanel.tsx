@@ -43,6 +43,7 @@ const generateJiraData = (issue: QaIssue, targetLang: string, fileName: string):
 *Location:* ${issue.location || 'N/A'}
 
 *Glossary Source:* ${issue.glossarySource || 'N/A'}
+*Style Rule ID:* ${issue.styleRuleId || 'N/A'}
 
 *Source File:* ${fileName}
 
@@ -442,10 +443,15 @@ const IssueCard: React.FC<{
         <div className="flex items-center space-x-2">
           {getIcon(issue.severity)}
           <span className="font-bold text-sm text-slate-800">{issue.id}</span>
-          <span className="text-xs px-2 py-0.5 bg-white border rounded text-slate-500">{issue.issueCategory}</span>
+          <span className={`text-xs px-2 py-0.5 border rounded ${issue.issueCategory === 'Style' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white text-slate-500'}`}>{issue.issueCategory}</span>
           {issue.issueCategory === 'Terminology' && issue.glossarySource && (
             <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 border border-purple-200 rounded text-purple-600 truncate max-w-[200px]" title={issue.glossarySource}>
               📋 {issue.glossarySource}
+            </span>
+          )}
+          {issue.issueCategory === 'Style' && issue.styleRuleId && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-600 truncate max-w-[200px]" title={issue.styleRuleId}>
+              📏 {issue.styleRuleId}
             </span>
           )}
         </div>

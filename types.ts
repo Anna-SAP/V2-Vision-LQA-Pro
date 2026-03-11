@@ -14,6 +14,17 @@ export interface QaScores {
   localizationTone: number;
 }
 
+export interface StyleGuideRule {
+  ruleId: string;
+  language: string;
+  category: string;
+  section: string;
+  description: string;
+  exampleCorrect?: string;
+  exampleIncorrect?: string;
+  notes?: string;
+}
+
 export interface QaIssue {
   id: string;
   location: string;
@@ -32,6 +43,7 @@ export interface QaIssue {
   suggestionsTarget: string[];
   glossarySource?: string; // Which glossary file this terminology issue was matched against
   glossaryTermId?: string; // Unique ID (e.g. TERM-001) for strict hallucination prevention
+  styleRuleId?: string; // For Style Guide issues
 }
 
 export interface ScreenshotReport {
@@ -83,6 +95,7 @@ export interface LlmRequestPayload {
   deImageBase64?: string; // Or URL (Target Image)
   targetLanguage: SupportedLocale;
   glossaryText?: string;
+  styleGuideRules?: StyleGuideRule[];
   reportLanguage: AppLanguage; // Add report language preference
 }
 

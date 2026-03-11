@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { LlmRequestPayload, LlmResponse, ScreenshotReport } from '../types';
-import { getAnalysisSystemPrompt, LLM_MODEL_ID } from '../constants';
+import { getAnalysisSystemPrompt, LLM_MODEL_ID, LLM_FALLBACK_MODEL_ID } from '../constants';
 import { determineStrictQuality, enforceScoreConsistency } from './reportGenerator';
 import { retrieveSkills, formatSkillsForPrompt } from './lqaSkillBank';
 
@@ -43,6 +43,10 @@ const qaIssueSchema: Schema = {
     glossaryTermId: {
       type: Type.STRING,
       description: "REQUIRED for Terminology issues. Must match the [ID:TERM-xxx] tag from the glossary context exactly. If not found, set to null."
+    },
+    styleRuleId: {
+      type: Type.STRING,
+      description: "REQUIRED for Style issues if they violate a specific Style Guide rule. Must match the [RULE xxx] tag from the style guide context exactly. If not found, set to null."
     }
   },
   required: ["id", "location", "issueCategory", "severity", "description", "suggestionRationale", "suggestionsTarget"]
@@ -419,8 +423,39 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
     const skillsBlock = formatSkillsForPrompt(retrievedSkills);
     console.log(`[SkillBank] Scene: ${retrievedSkills.sceneType} | General: ${retrievedSkills.generalSkills.length} | Scene-specific: ${retrievedSkills.sceneSkills.length}`);
 
-    // 3. Prepare Prompt (Dynamic based on language + skills)
-    const systemPrompt = getAnalysisSystemPrompt(payload.targetLanguage, payload.reportLanguage, skillsBlock);
+    // 2.5 Format Style Guide Rules
+    let styleGuideBlock = '';
+    if (payload.styleGuideRules && payload.styleGuideRules.length > 0) {
+      const rulesByCategory = payload.styleGuideRules.reduce((acc, rule) => {
+        const cat = (rule.category || 'general').toLowerCase();
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(rule);
+        return acc;
+      }, {} as Record<string, typeof payload.styleGuideRules>);
+
+      styleGuideBlock = `## Style Guide Rules for ${payload.targetLanguage}\n\nThe following are official translation style rules. Check EACH rule against the screenshot translation. Report violations as Style issues.\n\nRules are grouped by category. Pay special attention to: punctuation, capitalization, and numbers — these are the most common violation types.\n\n`;
+
+      const highPriorityCategories = ['punctuation', 'capitalization', 'numbers', 'grammar'];
+
+      for (const [category, rules] of Object.entries(rulesByCategory)) {
+        styleGuideBlock += `### ${category} (${rules.length} rules)\n`;
+        const isHighPriority = highPriorityCategories.includes(category);
+        
+        rules.forEach(rule => {
+          styleGuideBlock += `- [RULE ${rule.ruleId}] ${rule.description}\n`;
+          // Only include examples and notes for high priority categories to save tokens
+          if (isHighPriority) {
+            if (rule.exampleCorrect) styleGuideBlock += `  ✓ Correct: ${rule.exampleCorrect}\n`;
+            if (rule.exampleIncorrect) styleGuideBlock += `  ✗ Incorrect: ${rule.exampleIncorrect}\n`;
+            if (rule.notes) styleGuideBlock += `  ℹ Notes: ${rule.notes}\n`;
+          }
+        });
+        styleGuideBlock += '\n';
+      }
+    }
+
+    // 3. Prepare Prompt (Dynamic based on language + skills + style guide)
+    const systemPrompt = getAnalysisSystemPrompt(payload.targetLanguage, payload.reportLanguage, skillsBlock, styleGuideBlock);
     
     const userPrompt = `
       Project Context / Glossary (Total Chars: ${payload.glossaryText?.length || 0}):

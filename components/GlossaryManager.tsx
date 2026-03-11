@@ -3,6 +3,8 @@ import { FileSpreadsheet, Upload, History, Trash2, Check, AlertCircle, FileText,
 import * as XLSX from 'xlsx';
 import { PRESET_GLOSSARIES } from '../services/terminologyManifest';
 
+import { StyleGuideRule } from '../types';
+
 export interface GlossaryManagerRef {
   loadPreset: (lang: 'fr-FR' | 'de-DE') => Promise<void>;
 }
@@ -10,6 +12,8 @@ export interface GlossaryManagerRef {
 interface GlossaryManagerProps {
   currentGlossary: string;
   onUpdate: (text: string) => void;
+  styleGuideRules?: StyleGuideRule[];
+  onStyleGuideUpdate?: (rules: StyleGuideRule[]) => void;
   onLangDetected?: (lang: 'de-DE' | 'fr-FR' | null) => void;
   t: any;
 }
@@ -25,10 +29,12 @@ interface LoadedFile {
   id: string;
   name: string;
   count: number;
+  type: 'glossary' | 'styleguide';
   terms: string[]; // Array of "Source = Target"
+  rules?: StyleGuideRule[]; // For style guide
 }
 
-export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, onLangDetected, t }, ref) => {
+export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, styleGuideRules = [], onStyleGuideUpdate, onLangDetected, t }, ref) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'import'>('import'); // Default to import
   const [isDragging, setIsDragging] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -128,7 +134,7 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
       }
   };
 
-  const processFileContent = async (file: File): Promise<string[]> => {
+  const processFileContent = async (file: File): Promise<{ type: 'glossary', terms: string[] } | { type: 'styleguide', rules: StyleGuideRule[] }> => {
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data, { type: 'array' });
     const sheetName = workbook.SheetNames[0];
@@ -138,6 +144,39 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
     if (jsonData.length === 0) throw new Error("Empty file");
 
     const keys = Object.keys(jsonData[0]);
+    
+    // Check if it's a Style Guide file
+    const isStyleGuide = file.name.toLowerCase().includes('styleguide') || 
+      (keys.some(k => /rule id/i.test(k)) && keys.some(k => /category/i.test(k)) && keys.some(k => /description/i.test(k)));
+
+    if (isStyleGuide) {
+      const ruleIdKey = keys.find(k => /rule id/i.test(k)) || keys[0];
+      const langKey = keys.find(k => /language/i.test(k));
+      const categoryKey = keys.find(k => /category/i.test(k));
+      const sectionKey = keys.find(k => /section/i.test(k));
+      const descKey = keys.find(k => /description/i.test(k));
+      const correctKey = keys.find(k => /correct example/i.test(k));
+      const incorrectKey = keys.find(k => /incorrect example/i.test(k));
+      const notesKey = keys.find(k => /notes/i.test(k));
+
+      const rules: StyleGuideRule[] = jsonData.map(row => {
+        if (!row[ruleIdKey] || !row[descKey!]) return null;
+        return {
+          ruleId: String(row[ruleIdKey]).trim(),
+          language: langKey && row[langKey] ? String(row[langKey]).trim() : 'Unknown',
+          category: categoryKey && row[categoryKey] ? String(row[categoryKey]).trim() : 'general',
+          section: sectionKey && row[sectionKey] ? String(row[sectionKey]).trim() : '',
+          description: String(row[descKey!]).trim(),
+          exampleCorrect: correctKey && row[correctKey] ? String(row[correctKey]).trim() : undefined,
+          exampleIncorrect: incorrectKey && row[incorrectKey] ? String(row[incorrectKey]).trim() : undefined,
+          notes: notesKey && row[notesKey] ? String(row[notesKey]).trim() : undefined,
+        };
+      }).filter(Boolean) as StyleGuideRule[];
+
+      return { type: 'styleguide', rules };
+    }
+
+    // Otherwise, it's a Glossary file
     let sourceKey = keys.find(k => /source|en|english/i.test(k));
     let targetKey = keys.find(k => /target|de|fr|german|french|trans/i.test(k));
 
@@ -146,11 +185,13 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
 
     if (!sourceKey || !targetKey) throw new Error(t.glossary.errorFormat);
 
-    return jsonData.map(row => {
+    const terms = jsonData.map(row => {
       const src = row[sourceKey!] ? String(row[sourceKey!]).trim() : '';
       const tgt = row[targetKey!] ? String(row[targetKey!]).trim() : '';
       return src && tgt ? `${src} = ${tgt}` : null;
     }).filter(Boolean) as string[];
+
+    return { type: 'glossary', terms };
   };
 
   const handleFileUpload = async (file: File) => {
@@ -158,14 +199,16 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
     setError(null);
 
     try {
-      const terms = await processFileContent(file);
-      const content = terms.join('\n');
+      const result = await processFileContent(file);
+      const content = result.type === 'glossary' ? result.terms.join('\n') : '';
 
       const newFileObj: LoadedFile = {
           id: Math.random().toString(36).substr(2, 9),
           name: file.name,
-          count: terms.length,
-          terms: terms
+          count: result.type === 'glossary' ? result.terms.length : result.rules.length,
+          type: result.type,
+          terms: result.type === 'glossary' ? result.terms : [],
+          rules: result.type === 'styleguide' ? result.rules : undefined
       };
 
       if (uploadMode === 'replace') {
@@ -174,7 +217,7 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
           setLoadedFiles(prev => [...prev, newFileObj]);
       }
 
-      saveToHistory(file.name, content, terms.length);
+      saveToHistory(file.name, content, newFileObj.count);
 
     } catch (err: any) {
       setError(err.message || "Failed to parse file");
@@ -240,13 +283,15 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
             const blob = await response.blob();
             // Convert Blob to File to reuse existing processing logic
             const file = new File([blob], preset.name, { type: blob.type });
-            const terms = await processFileContent(file);
+            const result = await processFileContent(file);
 
             newFiles.push({
                 id: Math.random().toString(36).substr(2, 9),
                 name: preset.name,
-                count: terms.length,
-                terms: terms
+                count: result.type === 'glossary' ? result.terms.length : result.rules.length,
+                type: result.type,
+                terms: result.type === 'glossary' ? result.terms : [],
+                rules: result.type === 'styleguide' ? result.rules : undefined
             });
         }));
         
@@ -372,13 +417,17 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
                         {loadedFiles.map(file => (
                             <div key={file.id} className="bg-white border border-slate-200 rounded-lg p-2.5 flex justify-between items-center group shadow-sm hover:border-slate-300 transition-colors">
                                 <div className="flex items-center overflow-hidden min-w-0">
-                                    <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center mr-3 shrink-0">
-                                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 shrink-0 ${file.type === 'styleguide' ? 'bg-purple-50' : 'bg-green-50'}`}>
+                                        {file.type === 'styleguide' ? (
+                                            <FileText className="w-4 h-4 text-purple-600" />
+                                        ) : (
+                                            <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                                        )}
                                     </div>
                                     <div className="truncate">
                                         <div className="text-xs font-semibold text-slate-700 truncate" title={file.name}>{file.name}</div>
                                         <div className="text-[10px] text-slate-400 font-medium">
-                                            {t.glossary.termCount.replace('{count}', file.count)}
+                                            {file.type === 'styleguide' ? `${file.count} rules` : t.glossary.termCount.replace('{count}', file.count)}
                                         </div>
                                     </div>
                                 </div>
