@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { LlmRequestPayload, LlmResponse, ScreenshotReport } from '../types';
+import { LlmRequestPayload, LlmResponse, ScreenshotReport, QaIssue, StyleGuideRule } from '../types';
 import { getAnalysisSystemPrompt, LLM_MODEL_ID, LLM_FALLBACK_MODEL_ID } from '../constants';
 import { determineStrictQuality, enforceScoreConsistency } from './reportGenerator';
 import { retrieveSkills, formatSkillsForPrompt } from './lqaSkillBank';
@@ -42,15 +42,15 @@ const qaIssueSchema: Schema = {
     },
     glossaryTermId: {
       type: Type.STRING,
-      description: "REQUIRED for Terminology issues. Must match the [ID:TERM-xxx] tag from the glossary context exactly. If not found, set to null."
+      description: "Leave empty."
     },
     ruleId: {
       type: Type.STRING,
-      description: "REQUIRED for Style/Formatting/Punctuation/Capitalization/Numbers issues. Must match the specific Style Guide Rule ID violated. If not found, set to 'GENERAL_BEST_PRACTICE' or null."
+      description: "Leave empty. Populated in post-processing."
     },
     ruleDescription: {
       type: Type.STRING,
-      description: "REQUIRED if ruleId is provided. A brief description of the violated rule."
+      description: "Leave empty."
     }
   },
   required: ["id", "location", "issueCategory", "severity", "description", "suggestionRationale", "suggestionsTarget"]
@@ -406,6 +406,109 @@ Please verify each issue and return the verdict.
   }
 }
 
+function textSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const wordsA = new Set(a.toLowerCase().split(/\s+/));
+  const wordsB = new Set(b.toLowerCase().split(/\s+/));
+  const intersection = [...wordsA].filter(w => wordsB.has(w)).length;
+  const union = new Set([...wordsA, ...wordsB]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function consensusFilter(allRuns: QaIssue[][], threshold: number = 2): QaIssue[] {
+  const candidates = allRuns.flat();
+  const merged: QaIssue[] = [];
+
+  for (const candidate of candidates) {
+    const existing = merged.find(m =>
+      m.issueCategory === candidate.issueCategory &&
+      textSimilarity(m.targetText, candidate.targetText) > 0.8
+    );
+
+    if (existing) {
+      existing._count = (existing._count || 1) + 1;
+      if ((candidate.description || '').length > (existing.description || '').length) {
+        Object.assign(existing, candidate, { _count: existing._count });
+      }
+    } else {
+      merged.push({ ...candidate, _count: 1 });
+    }
+  }
+
+  return merged.filter(m => (m._count || 0) >= threshold);
+}
+
+function extractKeywords(text: string): string[] {
+  if (!text) return [];
+  const stopWords = new Set(['the','a','an','is','are','was','were','be','been',
+    'in','on','at','to','for','of','with','and','or','not','no','by','from',
+    'that','this','it','as','if','but','do','does','did','has','have','had',
+    'le','la','les','de','du','des','un','une','et','ou','en','à','par']);
+  return text.toLowerCase()
+    .replace(/[^\w\sàâäéèêëïîôùûüÿçæœ]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stopWords.has(w));
+}
+
+function keywordOverlap(wordsA: string[], wordsB: string[]): number {
+  if (wordsA.length === 0 || wordsB.length === 0) return 0;
+  const setB = new Set(wordsB);
+  const matches = wordsA.filter(w => setB.has(w)).length;
+  return matches / Math.max(wordsA.length, wordsB.length);
+}
+
+function matchRuleIds(issues: QaIssue[], styleGuideRules: StyleGuideRule[]): QaIssue[] {
+  if (!styleGuideRules || styleGuideRules.length === 0) return issues;
+
+  const categoryMap: Record<string, string[]> = {
+    'Number Formatting': ['numbers'],
+    'Punctuation': ['punctuation'],
+    'Capitalization': ['capitalization'],
+    'Grammar': ['grammar'],
+    'Style': ['style_tone'],
+    'Spelling': ['spelling'],
+    'Terminology': ['terminology'],
+    'Abbreviation': ['abbreviations'],
+    'Formatting': ['formatting', 'numbers'],
+    'DNT Violation': ['trademarks', 'terminology'],
+  };
+
+  for (const issue of issues) {
+    const targetCategories = categoryMap[issue.issueCategory] || [];
+    let candidates = styleGuideRules.filter(r =>
+      targetCategories.includes((r.category || '').toLowerCase())
+    );
+
+    if (candidates.length === 0) {
+      candidates = styleGuideRules;
+    }
+
+    const issueWords = extractKeywords(issue.description + ' ' + (issue.targetText || ''));
+    let bestMatch: StyleGuideRule | null = null;
+    let bestScore = 0;
+
+    for (const rule of candidates) {
+      const ruleWords = extractKeywords(
+        rule.description + ' ' + (rule.exampleCorrect || '') + ' ' + (rule.exampleIncorrect || '')
+      );
+      const score = keywordOverlap(issueWords, ruleWords);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = rule;
+      }
+    }
+
+    if (bestMatch && bestScore >= 0.15) {
+      issue.ruleId = bestMatch.ruleId;
+      issue.ruleDescription = bestMatch.description;
+    } else if (['Number Formatting', 'Punctuation', 'Capitalization', 'Grammar', 'Style', 'Spelling', 'Formatting', 'Abbreviation'].includes(issue.issueCategory)) {
+      issue.ruleId = 'GENERAL_BEST_PRACTICE';
+      issue.ruleDescription = 'No specific rule matched in loaded Style Guide.';
+    }
+  }
+  return issues;
+}
+
 export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<LlmResponse> {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -415,7 +518,7 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const runAnalysis = async (modelId: string) => {
+  const runAnalysis = async (modelId: string): Promise<ScreenshotReport> => {
     // 1. Prepare Images
     const [enImage, deImage] = await Promise.all([
       processImageUrl(payload.enImageBase64 || ''),
@@ -536,15 +639,47 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
     // but UI handles both.
     parsedReport.overall.qualityLevel = strictLevel as any;
 
-    return {
-      report: parsedReport
-    };
+    return parsedReport;
   };
 
   try {
-    return await retryWithBackoff(() => runAnalysis(LLM_MODEL_ID));
+    const NUM_RUNS = payload.analysisMode === 'precise' ? 3 : 1;
+    const CONSENSUS_THRESHOLD = payload.analysisMode === 'precise' ? 2 : 1;
+
+    const allRuns: QaIssue[][] = [];
+    let baseReport: ScreenshotReport | null = null;
+
+    for (let i = 0; i < NUM_RUNS; i++) {
+      if (payload.onProgress) {
+        payload.onProgress(i + 1, NUM_RUNS);
+      }
+      let report: ScreenshotReport;
+      try {
+        report = await retryWithBackoff(() => runAnalysis(LLM_MODEL_ID));
+      } catch (error) {
+        console.warn(`Run ${i + 1} failed with Gemini 3.1 Pro, switching to Fallback Model...`, error);
+        report = await retryWithBackoff(() => runAnalysis(LLM_FALLBACK_MODEL_ID));
+      }
+      allRuns.push(report.issues || []);
+      if (!baseReport) baseReport = report;
+    }
+
+    if (!baseReport) throw new Error("All analysis runs failed.");
+
+    const consensusIssues = consensusFilter(allRuns, CONSENSUS_THRESHOLD);
+    const finalIssues = matchRuleIds(consensusIssues, payload.styleGuideRules || []);
+
+    baseReport.issues = finalIssues;
+
+    // Re-evaluate quality based on final issues
+    sanitizeReport(baseReport, payload.glossaryText);
+    enforceScoreConsistency(baseReport);
+    const strictLevel = determineStrictQuality(baseReport);
+    baseReport.overall.qualityLevel = strictLevel as any;
+
+    return { report: baseReport };
   } catch (error) {
-    console.warn("Gemini 3.1 Pro failed, switching to Fallback Model (Gemini 2.0 Flash)...", error);
-    return await retryWithBackoff(() => runAnalysis(LLM_FALLBACK_MODEL_ID));
+    console.error("Analysis failed:", error);
+    throw error;
   }
 }

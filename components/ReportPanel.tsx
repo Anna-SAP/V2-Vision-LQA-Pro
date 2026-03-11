@@ -15,6 +15,9 @@ interface ReportPanelProps {
   activeIssueId: string | null;
   onIssueHover: (id: string | null) => void;
   onIssueClick: (id: string | null) => void;
+  analysisMode: 'fast' | 'precise';
+  setAnalysisMode: (mode: 'fast' | 'precise') => void;
+  analysisProgress?: {current: number, total: number} | null;
 }
 
 // --- JIRA Generator Logic ---
@@ -76,7 +79,10 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
   hoveredIssueId,
   activeIssueId,
   onIssueHover,
-  onIssueClick
+  onIssueClick,
+  analysisMode,
+  setAnalysisMode,
+  analysisProgress
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [bugModalData, setBugModalData] = useState<JiraData | null>(null);
@@ -105,9 +111,27 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
                <span className="font-bold">{t.contextActive}:</span> {glossary.length} chars
              </div>
           )}
-          <Button onClick={onGenerate} isLoading={isGenerating} size="lg">
-            {isGenerating ? t.analyzing : t.genReport}
-          </Button>
+          
+          <div className="flex flex-col items-center gap-4 mb-6">
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button
+                onClick={() => setAnalysisMode('fast')}
+                className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${analysisMode === 'fast' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Fast Mode (1 Run)
+              </button>
+              <button
+                onClick={() => setAnalysisMode('precise')}
+                className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${analysisMode === 'precise' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Precise Mode (3 Runs)
+              </button>
+            </div>
+            
+            <Button onClick={onGenerate} isLoading={isGenerating} size="lg">
+              {isGenerating ? (analysisProgress ? `Running analysis ${analysisProgress.current}/${analysisProgress.total}...` : t.analyzing) : t.genReport}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -476,6 +500,12 @@ const IssueCard: React.FC<{
       <p className="text-xs text-slate-500 mb-2 font-mono bg-white/50 p-1 rounded inline-block">{issue.location}</p>
       <p className="text-sm text-slate-700 mb-3">{issue.description}</p>
 
+      {issue._count && issue._count > 1 && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', color: '#15803d', fontWeight: 600, marginBottom: '12px', marginRight: '8px' }}>
+          ✓ {issue._count}/3 runs agreed
+        </div>
+      )}
+
       {issue.ruleId && issue.ruleId !== 'null' && (
         isValidRuleId(issue.ruleId) ? (
           <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>
@@ -484,10 +514,10 @@ const IssueCard: React.FC<{
             {issue.ruleDescription && <span style={{ color: '#64748b' }}>— {issue.ruleDescription}</span>}
           </div>
         ) : (
-          <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fffbeb', border: '1px solid #fcd34d', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>
-            <span style={{ color: '#92400e', fontWeight: 700 }}>⚠️ UNVERIFIED</span>
-            <code style={{ color: '#92400e', fontWeight: 600 }}>{issue.ruleId}</code>
-            <span style={{ color: '#92400e' }}>— Rule ID not found in loaded Style Guide</span>
+          <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>
+            <span style={{ color: '#475569', fontWeight: 700 }}>📏 RULE</span>
+            <code style={{ color: '#475569', fontWeight: 600 }}>{issue.ruleId}</code>
+            <span style={{ color: '#64748b' }}>— {issue.ruleDescription || 'No specific rule matched in loaded Style Guide'}</span>
           </div>
         )
       )}

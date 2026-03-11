@@ -400,6 +400,11 @@ export const generateReportHtml = (
         </div>
         ${issue.location ? `<div class="issue-loc">${issue.location}</div>` : ''}
         <p class="issue-desc">${issue.description}</p>
+        ${issue._count && issue._count > 1 ? `
+        <div style="display:inline-flex; align-items:center; gap:4px; background:#f0fdf4; border:1px solid #bbf7d0; padding:2px 8px; border-radius:4px; font-size:11px; color:#15803d; font-weight:600; margin-bottom: 12px; margin-right: 8px;">
+          ✓ ${issue._count}/3 runs agreed
+        </div>
+        ` : ''}
         ${issue.ruleId && issue.ruleId !== 'null' ? (
           isValidRuleId(issue.ruleId) ? `
           <div style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#f0f9ff; border:1px solid #bae6fd; padding:4px 10px; border-radius:4px; font-size:12px; margin-bottom: 12px;">
@@ -408,10 +413,10 @@ export const generateReportHtml = (
             ${issue.ruleDescription ? `<span style="color:#64748b;">— ${issue.ruleDescription}</span>` : ''}
           </div>
           ` : `
-          <div style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#fffbeb; border:1px solid #fcd34d; padding:4px 10px; border-radius:4px; font-size:12px; margin-bottom: 12px;">
-            <span style="color:#92400e; font-weight:700;">⚠️ UNVERIFIED</span>
-            <code style="color:#92400e; font-weight:600;">${issue.ruleId}</code>
-            <span style="color:#92400e;">— Rule ID not found in loaded Style Guide</span>
+          <div style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #cbd5e1; padding:4px 10px; border-radius:4px; font-size:12px; margin-bottom: 12px;">
+            <span style="color:#475569; font-weight:700;">📏 RULE</span>
+            <code style="color:#475569; font-weight:600;">${issue.ruleId}</code>
+            <span style="color:#64748b;">— ${issue.ruleDescription || 'No specific rule matched in loaded Style Guide'}</span>
           </div>
           `
         ) : ''}

@@ -54,6 +54,8 @@ const App: React.FC = () => {
   
   // Onboarding State
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [analysisMode, setAnalysisMode] = useState<'fast' | 'precise'>('fast');
+  const [analysisProgress, setAnalysisProgress] = useState<{current: number, total: number} | null>(null);
   const glossaryManagerRef = useRef<GlossaryManagerRef>(null);
 
   const t = UI_TEXT[appLanguage];
@@ -256,6 +258,7 @@ const App: React.FC = () => {
     if (!pair) return;
 
     try {
+      setAnalysisProgress({ current: 1, total: analysisMode === 'precise' ? 3 : 1 });
       const payload: LlmRequestPayload = {
         screenshotId: pair.id,
         enImageBase64: pair.enImageUrl, 
@@ -263,17 +266,21 @@ const App: React.FC = () => {
         targetLanguage: pair.targetLanguage,
         glossaryText,
         styleGuideRules,
-        reportLanguage: appLanguage // Pass current language
+        reportLanguage: appLanguage, // Pass current language
+        analysisMode,
+        onProgress: (current, total) => setAnalysisProgress({ current, total })
       };
 
       const response = await callTranslationQaLLM(payload);
       
       updatePairStatus(selectedPairId, { status: 'completed', report: response.report });
+      setAnalysisProgress(null);
       
     } catch (error: any) {
       console.error("Analysis failed", error);
       const msg = error instanceof Error ? error.message : "Unknown error occurred";
       updatePairStatus(selectedPairId, { status: 'failed', errorMessage: msg });
+      setAnalysisProgress(null);
     }
   };
 
@@ -328,8 +335,9 @@ const App: React.FC = () => {
       updatePairStatus(pair.id, { status: 'analyzing', errorMessage: undefined });
 
       try {
+        const timeoutMs = analysisMode === 'precise' ? 90000 : 30000;
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Request timed out (30s)")), 30000)
+          setTimeout(() => reject(new Error(`Request timed out (${timeoutMs/1000}s)`)), timeoutMs)
         );
 
         const payload: LlmRequestPayload = {
@@ -339,7 +347,8 @@ const App: React.FC = () => {
           targetLanguage: pair.targetLanguage,
           glossaryText,
           styleGuideRules,
-          reportLanguage: appLanguage // Pass current language
+          reportLanguage: appLanguage, // Pass current language
+          analysisMode
         };
 
         const response: any = await Promise.race([
@@ -685,6 +694,9 @@ const App: React.FC = () => {
                 activeIssueId={activeIssueId}
                 onIssueHover={setHoveredIssueId}
                 onIssueClick={setActiveIssueId}
+                analysisMode={analysisMode}
+                setAnalysisMode={setAnalysisMode}
+                analysisProgress={analysisProgress}
               />
             )}
           </Suspense>

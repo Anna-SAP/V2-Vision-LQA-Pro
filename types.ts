@@ -45,6 +45,7 @@ export interface QaIssue {
   glossaryTermId?: string; // Unique ID (e.g. TERM-001) for strict hallucination prevention
   ruleId?: string; // For Style Guide issues
   ruleDescription?: string; // For Style Guide issues
+  _count?: number; // Internal use for consensus filtering
 }
 
 export interface ScreenshotReport {
@@ -99,6 +100,8 @@ export interface LlmRequestPayload {
   glossaryText?: string;
   styleGuideRules?: StyleGuideRule[];
   reportLanguage: AppLanguage; // Add report language preference
+  analysisMode?: 'fast' | 'precise';
+  onProgress?: (currentRun: number, totalRuns: number) => void;
 }
 
 export interface LlmResponse {
