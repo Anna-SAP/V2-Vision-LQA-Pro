@@ -43,7 +43,7 @@ const generateJiraData = (issue: QaIssue, targetLang: string, fileName: string):
 *Location:* ${issue.location || 'N/A'}
 
 *Glossary Source:* ${issue.glossarySource || 'N/A'}
-*Style Rule ID:* ${issue.styleRuleId || 'N/A'}
+*Rule ID:* ${issue.ruleId || 'N/A'}
 
 *Source File:* ${fileName}
 
@@ -418,14 +418,17 @@ const IssueCard: React.FC<{
     switch(sev) {
       case 'Critical': return 'border-l-red-500 bg-red-50/50';
       case 'Major': return 'border-l-orange-500 bg-orange-50/50';
-      default: return 'border-l-yellow-500 bg-yellow-50/50';
+      case 'Minor': return 'border-l-yellow-500 bg-yellow-50/50';
+      case 'Preferential': return 'border-l-slate-400 bg-slate-50/50';
+      default: return 'border-l-slate-400 bg-slate-50/50';
     }
   };
 
   const getIcon = (sev: string) => {
     if (sev === 'Critical') return <AlertOctagon className="w-4 h-4 text-red-500" />;
     if (sev === 'Major') return <AlertTriangle className="w-4 h-4 text-orange-500" />;
-    return <Info className="w-4 h-4 text-yellow-500" />;
+    if (sev === 'Minor') return <Info className="w-4 h-4 text-yellow-500" />;
+    return <Info className="w-4 h-4 text-slate-400" />;
   };
 
   return (
@@ -449,11 +452,6 @@ const IssueCard: React.FC<{
               📋 {issue.glossarySource}
             </span>
           )}
-          {issue.issueCategory === 'Style' && issue.styleRuleId && (
-            <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-600 truncate max-w-[200px]" title={issue.styleRuleId}>
-              📏 {issue.styleRuleId}
-            </span>
-          )}
         </div>
         
         <div className="flex items-center gap-2">
@@ -472,6 +470,14 @@ const IssueCard: React.FC<{
       
       <p className="text-xs text-slate-500 mb-2 font-mono bg-white/50 p-1 rounded inline-block">{issue.location}</p>
       <p className="text-sm text-slate-700 mb-3">{issue.description}</p>
+
+      {issue.ruleId && issue.ruleId !== 'null' && (
+        <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>
+          <span style={{ color: '#0369a1', fontWeight: 700 }}>📏 RULE</span>
+          <code style={{ color: '#0c4a6e', fontWeight: 600 }}>{issue.ruleId}</code>
+          {issue.ruleDescription && <span style={{ color: '#64748b' }}>— {issue.ruleDescription}</span>}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 text-xs mb-3">
         <div className="bg-white p-2 rounded border border-slate-200">

@@ -287,11 +287,112 @@ export const getAnalysisSystemPrompt = (targetLang: SupportedLocale, reportLang:
    - Example: "Translation does not match glossary. Expect: 'Enregistrer' (Ref: [ID:TERM-002])."
 `;
 
+  const issueCategoryRuleZh = `
+Issue Category 分类体系（按优先级排列）：
+
+- Mistranslation — 含义扭曲或事实错误（翻译结果的意思与原文不同）
+- Omission — 源文内容被遗漏未翻译（原文有但译文没有）
+- Addition — 译文新增了原文中不存在的内容
+- Terminology — 术语不一致（与加载的 Glossary 不匹配）
+- Grammar — 目标语言语法错误
+- Punctuation — 标点使用错误（空格、冒号、分号等）
+- Capitalization — 大小写错误
+- Number Formatting — 数字/货币/日期格式不符合目标 locale 标准
+- Spelling — 拼写错误
+- Style — 语气/风格/表达方式不符合 Style Guide
+- Layout — UI 文本溢出、截断、换行不当等视觉问题
+- Placeholder — 变量占位符缺失或损坏
+- DNT Violation — Do Not Translate 项被错误翻译
+
+判断规则：
+- 如果源文有内容但译文完全没有对应 → Omission（不是 Mistranslation）
+- 如果译文存在但意思与源文不同 → Mistranslation
+- 如果是数字/货币/日期的格式问题 → Number Formatting（不是 Formatting）
+- 如果是标点空格问题 → Punctuation（不是 Formatting）
+`;
+
+  const issueCategoryRuleEn = `
+Issue Category Classification (Ordered by Priority):
+
+- Mistranslation — Meaning distorted or factual error (translation meaning differs from source)
+- Omission — Source content missing in translation (exists in source but not in target)
+- Addition — Translation added content not present in source
+- Terminology — Inconsistent terminology (does not match loaded Glossary)
+- Grammar — Target language grammar error
+- Punctuation — Incorrect punctuation usage (spaces, colons, semicolons, etc.)
+- Capitalization — Incorrect capitalization
+- Number Formatting — Number/currency/date format does not comply with target locale standards
+- Spelling — Spelling error
+- Style — Tone/style/expression does not comply with Style Guide
+- Layout — UI text overflow, truncation, improper line breaks, or other visual issues
+- Placeholder — Variable placeholder missing or corrupted
+- DNT Violation — Do Not Translate item was incorrectly translated
+
+Judgment Rules:
+- If source has content but target has no corresponding translation → Omission (NOT Mistranslation)
+- If translation exists but meaning differs from source → Mistranslation
+- If it's a number/currency/date format issue → Number Formatting (NOT Formatting)
+- If it's a punctuation/spacing issue → Punctuation (NOT Formatting)
+`;
+
+  const traceabilityRule = `
+## MANDATORY: Rule & Term Traceability
+
+For EVERY issue you report, you MUST do the following:
+
+1. **Terminology issues**: Reference the glossary Term ID (e.g., [ID:TERM-948]). If no matching term exists in the loaded glossary, mark glossaryTermId as "LLM Knowledge" and add tag [Auto-Downgraded].
+
+2. **Style/Formatting/Punctuation/Capitalization/Numbers issues**: Reference the specific Style Guide Rule ID that was violated (e.g., [RULE:FR-FR_RULE_00117]). Search through ALL loaded style rules to find the best match. If a style issue genuinely exists but no loaded rule covers it, use ruleId "GENERAL_BEST_PRACTICE" and explain the basis.
+
+3. **Layout issues**: No rule reference needed (these are visual, not rule-based).
+
+4. **Mistranslation/Omission issues**: Check Style Guide for relevant rules (e.g., FR-FR_RULE_00019 "Be complete: do not leave out content"). Reference if applicable.
+
+An issue reported WITHOUT a Rule ID or Term ID (when one should exist) will be considered unverified. This is the anti-hallucination mechanism — it forces you to ground every finding in loaded reference data.
+`;
+
+  const suggestionQualityRuleZh = `
+## Suggestion Quality Rules
+
+1. **自然优先**：建议的修复文本必须读起来像母语者写的，不能比原译文更生硬。如果原译文省略了源文中的冗余内容且省略后更自然，不要强行补回。
+
+2. **语义保真**：修复不得改变原文的人称（votre→le）、语气（正式→非正式）或含义。
+
+3. **缩写谨慎**：除非 Style Guide 明确允许在 UI 中使用某个缩写（参考 abbreviations 类规则），否则不要在 suggestion 中引入原文没有的缩写。
+
+4. **区分翻译修复 vs 工程修复**：
+   - 如果问题是翻译文本本身的错误 → 提供修正后的翻译文本
+   - 如果问题是 UI 容器太窄导致的换行/截断 → 明确标注 "Engineering Fix: 调整容器宽度" 而非篡改翻译
+
+5. **Severity 与行动建议对齐**：
+   - 如果你自己在 "Why fix this?" 中承认问题可以忽略（如 "Consider keeping it as a Minor stylistic preference"），那 severity 应该降为 Preferential 而非 Minor，或者直接不报告这个 issue。
+`;
+
+  const suggestionQualityRuleEn = `
+## Suggestion Quality Rules
+
+1. **Natural First**: Suggested fixes must read like they were written by a native speaker and must not be more awkward than the original translation. If the original translation omitted redundant source content and sounds more natural, do not force it back in.
+
+2. **Semantic Fidelity**: Fixes must not change the original person (e.g., your→the), tone (formal→informal), or meaning.
+
+3. **Cautious Abbreviations**: Do not introduce abbreviations in suggestions that are not in the source, UNLESS the Style Guide explicitly allows them in the UI (refer to abbreviations rules).
+
+4. **Distinguish Translation Fix vs Engineering Fix**:
+   - If the issue is an error in the translated text itself → Provide the corrected translation text
+   - If the issue is line wrapping/truncation caused by a narrow UI container → Explicitly state "Engineering Fix: Adjust container width" instead of tampering with the translation
+
+5. **Align Severity with Actionable Advice**:
+   - If you admit in "Why fix this?" that the issue can be ignored (e.g., "Consider keeping it as a Minor stylistic preference"), the severity should be downgraded to Preferential instead of Minor, or simply do not report the issue.
+`;
+
   const taskDesc = isZh
     ? `任务目标：
 这是一次 UI 截图测试。
 ${maskInstructionZh}
 ${termRulesZh}
+${issueCategoryRuleZh}
+${traceabilityRule}
+${suggestionQualityRuleZh}
 
 你需要从两个角度检查**有效区域**内的内容：
 1. 语言层面：翻译准确性（不包含未翻译的内容）、术语、语法、语气、文化与格式（日期/数字/单位）；
@@ -319,8 +420,8 @@ ${termRulesZh}
 - 非 Terminology 类型的 Issue 不需要填写此字段。
 
 **Style Guide 规则追溯 (Style Guide Rule Tracing)**：
-- 如果你发现违反了 \`styleGuideRules\` 部分提供的特定 Style Guide 规则，**必须**将问题分类为 **Style**。
-- 你**必须**将 \`[RULE xxx]\` 标签中的精确 Rule ID（例如 \`FR-FR_RULE_00045\`）填入 \`styleRuleId\` 字段。
+- 如果你发现违反了 \`styleGuideRules\` 部分提供的特定 Style Guide 规则，**必须**将问题分类为 **Style** 或相关类别。
+- 你**必须**将 \`[RULE xxx]\` 标签中的精确 Rule ID（例如 \`FR-FR_RULE_00045\`）填入 \`ruleId\` 字段，并在 \`ruleDescription\` 中简要描述规则。
 
 注意：请忽略所有“未翻译（Untranslated）”的文本，这部分由其他团队负责。
 再次强调：**所有报告内容必须使用中文输出。**`
@@ -328,6 +429,9 @@ ${termRulesZh}
 This is a UI Screenshot Testing task.
 ${maskInstructionEn}
 ${termRulesEn}
+${issueCategoryRuleEn}
+${traceabilityRule}
+${suggestionQualityRuleEn}
 
 You need to inspect the **VALID AREAS** from two perspectives:
 1. Linguistic: Translation accuracy (excluding untranslated text), terminology, grammar, tone, culture, and formatting (dates/numbers/units).
@@ -355,8 +459,8 @@ You need to inspect the **VALID AREAS** from two perspectives:
 - Non-Terminology issues do not need this field.
 
 **STYLE GUIDE RULE TRACING**:
-- If you find a violation of a specific Style Guide rule provided in the \`styleGuideRules\` section, you MUST classify the issue as **Style**.
-- You MUST populate the \`styleRuleId\` field with the exact Rule ID (e.g., \`FR-FR_RULE_00045\`) from the \`[RULE xxx]\` tag.
+- If you find a violation of a specific Style Guide rule provided in the \`styleGuideRules\` section, you MUST classify the issue as **Style** or related category.
+- You MUST populate the \`ruleId\` field with the exact Rule ID (e.g., \`FR-FR_RULE_00045\`) from the \`[RULE xxx]\` tag, and briefly describe it in \`ruleDescription\`.
 
 NOTE: Please IGNORE all "Untranslated" text, as this is handled by another team.
 REITERATION: **ALL REPORT CONTENT MUST BE IN ENGLISH.**`;

@@ -34,8 +34,8 @@ export interface QaIssue {
     width: number;
     height: number;
   };
-  issueCategory: 'Layout' | 'Mistranslation' | 'Terminology' | 'Formatting' | 'Grammar' | 'Style' | 'Other';
-  severity: 'Critical' | 'Major' | 'Minor';
+  issueCategory: 'Mistranslation' | 'Omission' | 'Addition' | 'Terminology' | 'Grammar' | 'Punctuation' | 'Capitalization' | 'Number Formatting' | 'Spelling' | 'Style' | 'Layout' | 'Placeholder' | 'DNT Violation' | 'Other';
+  severity: 'Critical' | 'Major' | 'Minor' | 'Preferential';
   sourceText: string;
   targetText: string;
   description: string; // Renamed from descriptionZh
@@ -43,7 +43,8 @@ export interface QaIssue {
   suggestionsTarget: string[];
   glossarySource?: string; // Which glossary file this terminology issue was matched against
   glossaryTermId?: string; // Unique ID (e.g. TERM-001) for strict hallucination prevention
-  styleRuleId?: string; // For Style Guide issues
+  ruleId?: string; // For Style Guide issues
+  ruleDescription?: string; // For Style Guide issues
 }
 
 export interface ScreenshotReport {
@@ -59,6 +60,7 @@ export interface ScreenshotReport {
     severeCount: number;
     majorCount: number;
     minorCount: number;
+    preferentialCount: number;
     optimizationAdvice: string;
     termAdvice: string;
   };

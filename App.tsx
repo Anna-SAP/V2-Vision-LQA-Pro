@@ -198,6 +198,7 @@ const App: React.FC = () => {
         severeCount: 0,
         majorCount: 1,
         minorCount: 0,
+        preferentialCount: 0,
         optimizationAdvice: appLanguage === 'zh' ? "建议缩短德语翻译。" : "Suggest shortening German translations.",
         termAdvice: ""
       }

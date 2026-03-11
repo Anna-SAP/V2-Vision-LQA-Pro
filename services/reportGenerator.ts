@@ -33,11 +33,21 @@ export const enforceScoreConsistency = (report: ScreenshotReport) => {
     
     // Map categories to score keys based on type definition
     switch(issue.issueCategory) {
-      case 'Mistranslation': scoreKey = 'accuracy'; break;
+      case 'Mistranslation':
+      case 'Omission':
+      case 'Addition':
+      case 'DNT Violation':
+        scoreKey = 'accuracy'; break;
       case 'Terminology': scoreKey = 'terminology'; break;
       case 'Layout': scoreKey = 'layout'; break;
-      case 'Grammar': scoreKey = 'grammar'; break;
-      case 'Formatting': scoreKey = 'formatting'; break;
+      case 'Grammar':
+      case 'Spelling':
+        scoreKey = 'grammar'; break;
+      case 'Punctuation':
+      case 'Capitalization':
+      case 'Number Formatting':
+      case 'Placeholder':
+        scoreKey = 'formatting'; break;
       case 'Style': scoreKey = 'localizationTone'; break;
       default: break;
     }
@@ -380,12 +390,18 @@ export const generateReportHtml = (
                 <span class="issue-id">${issue.id}</span>
                 <span class="issue-cat">${issue.issueCategory}</span>
                 ${issue.issueCategory === 'Terminology' && issue.glossarySource ? `<span class="issue-cat" style="background: #f3e8ff; color: #9333ea; border-color: #e9d5ff;">📋 ${issue.glossarySource}</span>` : ''}
-                ${issue.issueCategory === 'Style' && issue.styleRuleId ? `<span class="issue-cat" style="background: #eff6ff; color: #2563eb; border-color: #bfdbfe;">📏 ${issue.styleRuleId}</span>` : ''}
             </div>
             <span class="issue-sev sev-${issue.severity.toLowerCase()}">${issue.severity}</span>
         </div>
         ${issue.location ? `<div class="issue-loc">${issue.location}</div>` : ''}
         <p class="issue-desc">${issue.description}</p>
+        ${issue.ruleId && issue.ruleId !== 'null' ? `
+        <div style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#f0f9ff; border:1px solid #bae6fd; padding:4px 10px; border-radius:4px; font-size:12px; margin-bottom: 12px;">
+          <span style="color:#0369a1; font-weight:700;">📏 RULE</span>
+          <code style="color:#0c4a6e; font-weight:600;">${issue.ruleId}</code>
+          ${issue.ruleDescription ? `<span style="color:#64748b;">— ${issue.ruleDescription}</span>` : ''}
+        </div>
+        ` : ''}
         <div class="comparison-grid">
             <div class="text-box">
                 <span class="text-label">Source (EN-US)</span>

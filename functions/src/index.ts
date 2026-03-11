@@ -9,11 +9,11 @@ const qaIssueSchema: Schema = {
     location: { type: Type.STRING, description: "Where the issue is located in the UI" },
     issueCategory: { 
       type: Type.STRING, 
-      description: "One of: Layout, Mistranslation, Terminology, Formatting, Grammar, Style, Other" 
+      description: "One of: Mistranslation, Omission, Addition, Terminology, Grammar, Punctuation, Capitalization, Number Formatting, Spelling, Style, Layout, Placeholder, DNT Violation, Other" 
     },
     severity: { 
       type: Type.STRING, 
-      description: "Critical, Major, or Minor" 
+      description: "Critical, Major, Minor, or Preferential" 
     },
     sourceText: { type: Type.STRING },
     targetText: { type: Type.STRING },
@@ -30,6 +30,14 @@ const qaIssueSchema: Schema = {
     glossaryTermId: {
       type: Type.STRING,
       description: "REQUIRED for Terminology issues."
+    },
+    ruleId: {
+      type: Type.STRING,
+      description: "REQUIRED for Style/Formatting/Punctuation/Capitalization/Numbers issues."
+    },
+    ruleDescription: {
+      type: Type.STRING,
+      description: "REQUIRED if ruleId is provided."
     }
   },
   required: ["id", "location", "issueCategory", "severity", "description", "suggestionsTarget"]
@@ -68,10 +76,11 @@ const summarySchema: Schema = {
     severeCount: { type: Type.NUMBER },
     majorCount: { type: Type.NUMBER },
     minorCount: { type: Type.NUMBER },
+    preferentialCount: { type: Type.NUMBER },
     optimizationAdvice: { type: Type.STRING },
     termAdvice: { type: Type.STRING }
   },
-  required: ["severeCount", "majorCount", "minorCount", "optimizationAdvice"]
+  required: ["severeCount", "majorCount", "minorCount", "preferentialCount", "optimizationAdvice"]
 };
 
 const reportResponseSchema: Schema = {
@@ -236,7 +245,7 @@ Please verify each issue and return the verdict.
           const reasonLower = (verdict.reason || '').toLowerCase();
           const isHallucination = reasonLower.includes('hallucination') || reasonLower.includes('not visible') || reasonLower.includes('does not exist');
           
-          if ((issue.issueCategory === 'Style' || issue.issueCategory === 'Formatting') && !isHallucination) {
+          if ((['Style', 'Number Formatting', 'Punctuation', 'Capitalization', 'Spelling'].includes(issue.issueCategory)) && !isHallucination) {
             issue.severity = 'Minor';
             issue.description = `[Review: Minor] ${issue.description}`;
             return true;
