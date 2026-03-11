@@ -431,6 +431,11 @@ const IssueCard: React.FC<{
     return <Info className="w-4 h-4 text-slate-400" />;
   };
 
+  const isValidRuleId = (ruleId: string | undefined) => {
+    if (!ruleId || ruleId === 'null') return false;
+    return /^[A-Z]{2}-[A-Z]{2}_RULE_\d{5}$/.test(ruleId);
+  };
+
   return (
     <div 
       className={`p-3 rounded border border-l-4 shadow-sm relative group cursor-pointer transition-all duration-300
@@ -472,11 +477,19 @@ const IssueCard: React.FC<{
       <p className="text-sm text-slate-700 mb-3">{issue.description}</p>
 
       {issue.ruleId && issue.ruleId !== 'null' && (
-        <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>
-          <span style={{ color: '#0369a1', fontWeight: 700 }}>📏 RULE</span>
-          <code style={{ color: '#0c4a6e', fontWeight: 600 }}>{issue.ruleId}</code>
-          {issue.ruleDescription && <span style={{ color: '#64748b' }}>— {issue.ruleDescription}</span>}
-        </div>
+        isValidRuleId(issue.ruleId) ? (
+          <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>
+            <span style={{ color: '#0369a1', fontWeight: 700 }}>📏 RULE</span>
+            <code style={{ color: '#0c4a6e', fontWeight: 600 }}>{issue.ruleId}</code>
+            {issue.ruleDescription && <span style={{ color: '#64748b' }}>— {issue.ruleDescription}</span>}
+          </div>
+        ) : (
+          <div style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fffbeb', border: '1px solid #fcd34d', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>
+            <span style={{ color: '#92400e', fontWeight: 700 }}>⚠️ UNVERIFIED</span>
+            <code style={{ color: '#92400e', fontWeight: 600 }}>{issue.ruleId}</code>
+            <span style={{ color: '#92400e' }}>— Rule ID not found in loaded Style Guide</span>
+          </div>
+        )
       )}
 
       <div className="grid grid-cols-2 gap-2 text-xs mb-3">

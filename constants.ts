@@ -336,19 +336,28 @@ Judgment Rules:
 `;
 
   const traceabilityRule = `
-## MANDATORY: Rule & Term Traceability
+## CRITICAL: Rule ID Must Be Real
 
-For EVERY issue you report, you MUST do the following:
+The Style Guide rules loaded above each have a REAL Rule ID in the format "{LANG}_RULE_{5-digit-number}" (e.g., FR-FR_RULE_00117, DE-DE_RULE_00045).
 
-1. **Terminology issues**: Reference the glossary Term ID (e.g., [ID:TERM-948]). If no matching term exists in the loaded glossary, mark glossaryTermId as "LLM Knowledge" and add tag [Auto-Downgraded].
+When you report an issue related to style, formatting, punctuation, capitalization, numbers, abbreviations, or spelling:
 
-2. **Style/Formatting/Punctuation/Capitalization/Numbers issues**: Reference the specific Style Guide Rule ID that was violated (e.g., [RULE:FR-FR_RULE_00117]). Search through ALL loaded style rules to find the best match. If a style issue genuinely exists but no loaded rule covers it, use ruleId "GENERAL_BEST_PRACTICE" and explain the basis.
+1. You MUST search through ALL the loaded Style Guide rules above to find the rule that best matches the issue.
+2. The ruleId field MUST contain the EXACT Rule ID from the loaded data (e.g., "FR-FR_RULE_00117"), NOT a description or a made-up identifier.
+3. The ruleDescription field MUST contain the EXACT description text from that rule, copied verbatim.
 
-3. **Layout issues**: No rule reference needed (these are visual, not rule-based).
+Valid ruleId format:   "FR-FR_RULE_00117"  ✅
+Invalid ruleId format: "number_date_locale_format"  ❌
+Invalid ruleId format: "GENERAL_BEST_PRACTICE"  ❌ (only use this as absolute last resort)
 
-4. **Mistranslation/Omission issues**: Check Style Guide for relevant rules (e.g., FR-FR_RULE_00019 "Be complete: do not leave out content"). Reference if applicable.
+Example — if you detect a decimal point used instead of comma in French:
+  → Search loaded rules → Find "FR-FR_RULE_00117: Replace decimal point with comma and thousand separator with dot. ✓ 0,25  ✗ 0.25"
+  → Set ruleId = "FR-FR_RULE_00117"
+  → Set ruleDescription = "Replace decimal point with comma and thousand separator with dot."
 
-An issue reported WITHOUT a Rule ID or Term ID (when one should exist) will be considered unverified. This is the anti-hallucination mechanism — it forces you to ground every finding in loaded reference data.
+Only use "GENERAL_BEST_PRACTICE" if you have exhaustively searched ALL loaded rules and genuinely none of them cover the issue. This should be extremely rare — the loaded Style Guides have 130-140 rules covering punctuation, capitalization, numbers, grammar, style, abbreviations, formatting, terminology, spelling, and trademarks.
+
+For Terminology issues: Reference the glossary Term ID (e.g., TERM-948). If no matching term exists in the loaded glossary, mark glossaryTermId as "LLM Knowledge".
 `;
 
   const suggestionQualityRuleZh = `

@@ -383,6 +383,11 @@ export const generateReportHtml = (
         return `badge-${lower}`;
     };
 
+    const isValidRuleId = (ruleId: string | undefined) => {
+      if (!ruleId || ruleId === 'null') return false;
+      return /^[A-Z]{2}-[A-Z]{2}_RULE_\d{5}$/.test(ruleId);
+    };
+
     const issueHtml = issues.map(issue => `
       <div class="issue-card issue-${issue.severity.toLowerCase()}">
         <div class="issue-header">
@@ -395,13 +400,21 @@ export const generateReportHtml = (
         </div>
         ${issue.location ? `<div class="issue-loc">${issue.location}</div>` : ''}
         <p class="issue-desc">${issue.description}</p>
-        ${issue.ruleId && issue.ruleId !== 'null' ? `
-        <div style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#f0f9ff; border:1px solid #bae6fd; padding:4px 10px; border-radius:4px; font-size:12px; margin-bottom: 12px;">
-          <span style="color:#0369a1; font-weight:700;">📏 RULE</span>
-          <code style="color:#0c4a6e; font-weight:600;">${issue.ruleId}</code>
-          ${issue.ruleDescription ? `<span style="color:#64748b;">— ${issue.ruleDescription}</span>` : ''}
-        </div>
-        ` : ''}
+        ${issue.ruleId && issue.ruleId !== 'null' ? (
+          isValidRuleId(issue.ruleId) ? `
+          <div style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#f0f9ff; border:1px solid #bae6fd; padding:4px 10px; border-radius:4px; font-size:12px; margin-bottom: 12px;">
+            <span style="color:#0369a1; font-weight:700;">📏 RULE</span>
+            <code style="color:#0c4a6e; font-weight:600;">${issue.ruleId}</code>
+            ${issue.ruleDescription ? `<span style="color:#64748b;">— ${issue.ruleDescription}</span>` : ''}
+          </div>
+          ` : `
+          <div style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; background:#fffbeb; border:1px solid #fcd34d; padding:4px 10px; border-radius:4px; font-size:12px; margin-bottom: 12px;">
+            <span style="color:#92400e; font-weight:700;">⚠️ UNVERIFIED</span>
+            <code style="color:#92400e; font-weight:600;">${issue.ruleId}</code>
+            <span style="color:#92400e;">— Rule ID not found in loaded Style Guide</span>
+          </div>
+          `
+        ) : ''}
         <div class="comparison-grid">
             <div class="text-box">
                 <span class="text-label">Source (EN-US)</span>
