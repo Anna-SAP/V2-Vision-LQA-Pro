@@ -324,7 +324,7 @@ Please verify each issue and return the verdict.
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
         responseSchema: verificationSchema,
-        temperature: 0.2, // Slightly higher temperature for style sensitivity
+        temperature: 0.15, // Slightly higher temperature for style sensitivity
       }
     });
   } catch (error) {
@@ -343,7 +343,7 @@ Please verify each issue and return the verdict.
           systemInstruction: systemPrompt,
           responseMimeType: "application/json",
           responseSchema: verificationSchema,
-          temperature: 0.2,
+          temperature: 0.15,
         }
       });
     } catch (fallbackError) {
@@ -587,7 +587,7 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
         responseSchema: reportResponseSchema, // STRICT SCHEMA ENFORCEMENT
-        temperature: 0.2, // Lower temperature for more deterministic output
+        temperature: 0.15, // Lower temperature for more deterministic output
       }
     });
 

@@ -221,7 +221,7 @@ Please verify each issue and return the verdict.
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
         responseSchema: verificationSchema,
-        temperature: 0.2,
+        temperature: 0.15,
       }
     });
 
@@ -305,7 +305,7 @@ export const analyzeScreenshot = functions.https.onCall({
           systemInstruction: systemPrompt,
           responseMimeType: "application/json",
           responseSchema: reportResponseSchema,
-          temperature: 0.2,
+          temperature: 0.15,
         }
       });
 
