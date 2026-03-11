@@ -15,9 +15,8 @@ interface ReportPanelProps {
   activeIssueId: string | null;
   onIssueHover: (id: string | null) => void;
   onIssueClick: (id: string | null) => void;
-  analysisMode: 'fast' | 'precise';
-  setAnalysisMode: (mode: 'fast' | 'precise') => void;
   analysisProgress?: {current: number, total: number} | null;
+  onReverify: () => void;
 }
 
 // --- JIRA Generator Logic ---
@@ -80,9 +79,8 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
   activeIssueId,
   onIssueHover,
   onIssueClick,
-  analysisMode,
-  setAnalysisMode,
-  analysisProgress
+  analysisProgress,
+  onReverify
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [bugModalData, setBugModalData] = useState<JiraData | null>(null);
@@ -113,21 +111,6 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
           )}
           
           <div className="flex flex-col items-center gap-4 mb-6">
-            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-              <button
-                onClick={() => setAnalysisMode('fast')}
-                className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${analysisMode === 'fast' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Fast Mode (1 Run)
-              </button>
-              <button
-                onClick={() => setAnalysisMode('precise')}
-                className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${analysisMode === 'precise' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Precise Mode (3 Runs)
-              </button>
-            </div>
-            
             <Button onClick={onGenerate} isLoading={isGenerating} size="lg">
               {isGenerating ? (analysisProgress ? `Running analysis ${analysisProgress.current}/${analysisProgress.total}...` : t.analyzing) : t.genReport}
             </Button>
@@ -158,6 +141,8 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
 
   const report = pair.report!;
   const scores = report.overall.scores;
+  
+  const validIssues = report.issues.filter(i => i._meetsConsensus !== false);
   
   // Calculate strict quality for UI display (overriding LLM generic level if needed)
   const strictQuality = determineStrictQuality(report);
@@ -333,9 +318,23 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
                 <div className="flex items-center space-x-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{t.issuesDetected}</span>
                     <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
-                        {report.issues.length}
+                        {validIssues.length}
                     </span>
                 </div>
+                {pair.report && !pair.isReverified && (
+                  <button 
+                    onClick={onReverify}
+                    disabled={isGenerating}
+                    className={`re-verify-btn ${pair.reverifySuggested ? 'ring-2 ring-indigo-500 bg-indigo-50 text-indigo-700 border-indigo-200' : ''}`}
+                  >
+                    {isGenerating && analysisProgress ? `🔍 Re-verifying ${analysisProgress.current}/${analysisProgress.total}...` : '🔍 Re-verify this screenshot'}
+                  </button>
+                )}
+                {pair.isReverified && (
+                  <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                    ✓ Re-verified
+                  </span>
+                )}
             </div>
             
             <div className="space-y-4 pb-4">
@@ -460,12 +459,15 @@ const IssueCard: React.FC<{
     return /^[A-Z]{2}-[A-Z]{2}_RULE_\d{5}$/.test(ruleId);
   };
 
+  const isAutoRemoved = issue._meetsConsensus === false;
+
   return (
     <div 
       className={`p-3 rounded border border-l-4 shadow-sm relative group cursor-pointer transition-all duration-300
         ${getSeverityColor(issue.severity)}
         ${isHovered || isActive ? 'border-blue-400 ring-2 ring-blue-200/50 shadow-md scale-[1.01]' : 'border-slate-200'}
         ${isActive ? 'bg-blue-50/30' : ''}
+        ${isAutoRemoved ? 'opacity-50 grayscale' : ''}
       `}
       onMouseEnter={() => onHover(issue.id)}
       onMouseLeave={() => onHover(null)}
@@ -479,6 +481,16 @@ const IssueCard: React.FC<{
           {issue.issueCategory === 'Terminology' && issue.glossarySource && (
             <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 border border-purple-200 rounded text-purple-600 truncate max-w-[200px]" title={issue.glossarySource}>
               📋 {issue.glossarySource}
+            </span>
+          )}
+          {isAutoRemoved && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-slate-500 font-bold">
+              ✗ {issue._count || 1}/3 — auto-removed
+            </span>
+          )}
+          {!isAutoRemoved && issue._count && issue._count > 1 && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-600 font-bold">
+              ✓ {issue._count}/3 agreed
             </span>
           )}
         </div>
@@ -499,12 +511,6 @@ const IssueCard: React.FC<{
       
       <p className="text-xs text-slate-500 mb-2 font-mono bg-white/50 p-1 rounded inline-block">{issue.location}</p>
       <p className="text-sm text-slate-700 mb-3">{issue.description}</p>
-
-      {issue._count && issue._count > 1 && (
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', color: '#15803d', fontWeight: 600, marginBottom: '12px', marginRight: '8px' }}>
-          ✓ {issue._count}/3 runs agreed
-        </div>
-      )}
 
       {issue.ruleId && issue.ruleId !== 'null' && (
         isValidRuleId(issue.ruleId) ? (

@@ -3,9 +3,10 @@ import { UploadArea } from './components/UploadArea';
 import { PairList } from './components/PairList';
 import { CompareView } from './components/CompareView';
 import { GlossaryManager, GlossaryManagerRef } from './components/GlossaryManager';
-import { ScreenshotPair, LlmRequestPayload, BulkProcessingState, ScreenshotReport, AppLanguage, StyleGuideRule } from './types';
+import { ScreenshotPair, LlmRequestPayload, BulkProcessingState, ScreenshotReport, AppLanguage, StyleGuideRule, BatchStats } from './types';
 import { callTranslationQaLLM } from './services/llmService';
 import { generateReportHtml, generateExportFilename } from './services/reportGenerator';
+import { BatchProgressPanel } from './components/BatchProgressPanel';
 import { Layers, Activity, BookOpen, PanelLeftOpen, PanelLeftClose, PlayCircle, Globe, Loader2, RotateCcw, Trash2, GripVertical, BookDown } from 'lucide-react';
 import { LLM_DISPLAY_NAME, APP_VERSION, UI_TEXT } from './constants';
 import JSZip from 'jszip';
@@ -54,7 +55,7 @@ const App: React.FC = () => {
   
   // Onboarding State
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [analysisMode, setAnalysisMode] = useState<'fast' | 'precise'>('fast');
+  const [batchStats, setBatchStats] = useState<BatchStats | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<{current: number, total: number} | null>(null);
   const glossaryManagerRef = useRef<GlossaryManagerRef>(null);
 
@@ -258,7 +259,7 @@ const App: React.FC = () => {
     if (!pair) return;
 
     try {
-      setAnalysisProgress({ current: 1, total: analysisMode === 'precise' ? 3 : 1 });
+      setAnalysisProgress({ current: 1, total: 1 });
       const payload: LlmRequestPayload = {
         screenshotId: pair.id,
         enImageBase64: pair.enImageUrl, 
@@ -267,13 +268,22 @@ const App: React.FC = () => {
         glossaryText,
         styleGuideRules,
         reportLanguage: appLanguage, // Pass current language
-        analysisMode,
         onProgress: (current, total) => setAnalysisProgress({ current, total })
       };
 
       const response = await callTranslationQaLLM(payload);
       
-      updatePairStatus(selectedPairId, { status: 'completed', report: response.report });
+      const report = response.report;
+      const issues = report.issues || [];
+      const critical = issues.filter(i => i.severity === 'Critical').length;
+      const major = issues.filter(i => i.severity === 'Major').length;
+      const needsReverify = issues.length >= 5 || critical > 0 || major > 0;
+
+      updatePairStatus(selectedPairId, { 
+        status: 'completed', 
+        report: report,
+        reverifySuggested: needsReverify
+      });
       setAnalysisProgress(null);
       
     } catch (error: any) {
@@ -326,6 +336,18 @@ const App: React.FC = () => {
       errors: [],
       isComplete: false
     });
+    setBatchStats({
+      isActive: true,
+      isComplete: false,
+      total: pendingItems.length,
+      completed: 0,
+      startTime: Date.now(),
+      totalIssues: 0,
+      criticalCount: 0,
+      majorCount: 0,
+      minorCount: 0,
+      suggestedReverifyCount: 0
+    });
 
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
@@ -335,7 +357,7 @@ const App: React.FC = () => {
       updatePairStatus(pair.id, { status: 'analyzing', errorMessage: undefined });
 
       try {
-        const timeoutMs = analysisMode === 'precise' ? 90000 : 30000;
+        const timeoutMs = 30000;
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error(`Request timed out (${timeoutMs/1000}s)`)), timeoutMs)
         );
@@ -347,8 +369,7 @@ const App: React.FC = () => {
           targetLanguage: pair.targetLanguage,
           glossaryText,
           styleGuideRules,
-          reportLanguage: appLanguage, // Pass current language
-          analysisMode
+          reportLanguage: appLanguage // Pass current language
         };
 
         const response: any = await Promise.race([
@@ -356,7 +377,32 @@ const App: React.FC = () => {
            timeoutPromise
         ]);
 
-        updatePairStatus(pair.id, { status: 'completed', report: response.report });
+        const report = response.report;
+        const issues = report.issues || [];
+        const critical = issues.filter((i: any) => i.severity === 'Critical').length;
+        const major = issues.filter((i: any) => i.severity === 'Major').length;
+        const minor = issues.filter((i: any) => i.severity === 'Minor').length;
+        const needsReverify = issues.length >= 5 || critical > 0 || major > 0;
+
+        updatePairStatus(pair.id, { 
+          status: 'completed', 
+          report: report,
+          reverifySuggested: needsReverify
+        });
+        
+        setBatchStats(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            completed: prev.completed + 1,
+            totalIssues: prev.totalIssues + issues.length,
+            criticalCount: prev.criticalCount + critical,
+            majorCount: prev.majorCount + major,
+            minorCount: prev.minorCount + minor,
+            suggestedReverifyCount: prev.suggestedReverifyCount + (needsReverify ? 1 : 0)
+          };
+        });
+
         return true;
 
       } catch (error: any) {
@@ -394,7 +440,47 @@ const App: React.FC = () => {
 
     await Promise.all(workers);
     setBulkState(prev => ({ ...prev, isProcessing: false, isComplete: true }));
+    setBatchStats(prev => prev ? { ...prev, isActive: false, isComplete: true, endTime: Date.now() } : null);
     abortControllerRef.current = null;
+  };
+
+  const handleReverify = async (pairId: string) => {
+    const pair = pairs.find(p => p.id === pairId);
+    if (!pair || !pair.report) return;
+
+    updatePairStatus(pairId, { status: 'analyzing', errorMessage: undefined });
+    setAnalysisProgress({ current: 1, total: 2 });
+
+    try {
+      const payload: LlmRequestPayload = {
+        screenshotId: pair.id,
+        enImageBase64: pair.enImageUrl, 
+        deImageBase64: pair.deImageUrl,
+        targetLanguage: pair.targetLanguage,
+        glossaryText,
+        styleGuideRules,
+        reportLanguage: appLanguage,
+        isReverify: true,
+        existingReport: pair.report,
+        onProgress: (current, total) => setAnalysisProgress({ current, total })
+      };
+
+      const response = await callTranslationQaLLM(payload);
+      
+      updatePairStatus(pairId, { 
+        status: 'completed', 
+        report: response.report,
+        isReverified: true,
+        reverifySuggested: false // clear suggestion after reverify
+      });
+      setAnalysisProgress(null);
+      
+    } catch (error: any) {
+      console.error("Reverify failed", error);
+      const msg = error instanceof Error ? error.message : "Unknown error occurred";
+      updatePairStatus(pairId, { status: 'failed', errorMessage: msg });
+      setAnalysisProgress(null);
+    }
   };
 
   const generateSummaryCsv = () => {
@@ -634,6 +720,12 @@ const App: React.FC = () => {
             )}
           </div>
           
+          {batchStats && (
+            <div className="px-4 py-2">
+              <BatchProgressPanel stats={batchStats} />
+            </div>
+          )}
+
           <PairList 
             pairs={pairs} 
             selectedId={selectedPairId} 
@@ -694,9 +786,8 @@ const App: React.FC = () => {
                 activeIssueId={activeIssueId}
                 onIssueHover={setHoveredIssueId}
                 onIssueClick={setActiveIssueId}
-                analysisMode={analysisMode}
-                setAnalysisMode={setAnalysisMode}
                 analysisProgress={analysisProgress}
+                onReverify={() => selectedPair && handleReverify(selectedPair.id)}
               />
             )}
           </Suspense>

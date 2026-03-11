@@ -3,7 +3,7 @@ import { ScreenshotReport, QaScores } from '../types';
 // --- Strict Grading & Naming Logic ---
 
 export const determineStrictQuality = (report: ScreenshotReport): 'Critical' | 'Poor' | 'Good' | 'Excellent' => {
-  const issues = report.issues || [];
+  const issues = (report.issues || []).filter(i => i._meetsConsensus !== false);
   
   // 1. Critical Logic (Highest Priority)
   if (issues.some(i => i.severity === 'Critical')) return 'Critical';
@@ -26,7 +26,7 @@ export const determineStrictQuality = (report: ScreenshotReport): 'Critical' | '
 
 // Ensure visual scores match the found issues
 export const enforceScoreConsistency = (report: ScreenshotReport) => {
-  const issues = report.issues || [];
+  const issues = (report.issues || []).filter(i => i._meetsConsensus !== false);
   
   issues.forEach(issue => {
     let scoreKey: keyof QaScores | null = null;
@@ -69,7 +69,7 @@ export const enforceScoreConsistency = (report: ScreenshotReport) => {
 };
 
 export const determineIssueTypeTag = (report: ScreenshotReport): string => {
-  const issues = report.issues || [];
+  const issues = (report.issues || []).filter(i => i._meetsConsensus !== false);
   const hasTerm = issues.some(i => i.issueCategory === 'Terminology');
   const hasLayout = issues.some(i => i.issueCategory === 'Layout');
 

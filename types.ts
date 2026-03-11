@@ -46,6 +46,7 @@ export interface QaIssue {
   ruleId?: string; // For Style Guide issues
   ruleDescription?: string; // For Style Guide issues
   _count?: number; // Internal use for consensus filtering
+  _meetsConsensus?: boolean;
 }
 
 export interface ScreenshotReport {
@@ -78,6 +79,8 @@ export interface ScreenshotPair {
   status: 'pending' | 'analyzing' | 'completed' | 'failed';
   report?: ScreenshotReport;
   errorMessage?: string;
+  reverifySuggested?: boolean;
+  isReverified?: boolean;
 }
 
 export interface GlobalSummary {
@@ -100,8 +103,23 @@ export interface LlmRequestPayload {
   glossaryText?: string;
   styleGuideRules?: StyleGuideRule[];
   reportLanguage: AppLanguage; // Add report language preference
-  analysisMode?: 'fast' | 'precise';
   onProgress?: (currentRun: number, totalRuns: number) => void;
+  isReverify?: boolean;
+  existingReport?: ScreenshotReport;
+}
+
+export interface BatchStats {
+  isActive: boolean;
+  isComplete: boolean;
+  total: number;
+  completed: number;
+  startTime: number;
+  endTime?: number;
+  totalIssues: number;
+  criticalCount: number;
+  majorCount: number;
+  minorCount: number;
+  suggestedReverifyCount: number;
 }
 
 export interface LlmResponse {

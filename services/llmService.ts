@@ -435,7 +435,10 @@ function consensusFilter(allRuns: QaIssue[][], threshold: number = 2): QaIssue[]
     }
   }
 
-  return merged.filter(m => (m._count || 0) >= threshold);
+  return merged.map(m => ({
+    ...m,
+    _meetsConsensus: (m._count || 0) >= threshold
+  }));
 }
 
 function extractKeywords(text: string): string[] {
@@ -643,11 +646,17 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
   };
 
   try {
-    const NUM_RUNS = payload.analysisMode === 'precise' ? 3 : 1;
-    const CONSENSUS_THRESHOLD = payload.analysisMode === 'precise' ? 2 : 1;
+    const isReverify = payload.isReverify;
+    const NUM_RUNS = isReverify ? 2 : 1;
+    const CONSENSUS_THRESHOLD = isReverify ? 2 : 1;
 
     const allRuns: QaIssue[][] = [];
     let baseReport: ScreenshotReport | null = null;
+
+    if (isReverify && payload.existingReport) {
+      allRuns.push(payload.existingReport.issues);
+      baseReport = payload.existingReport;
+    }
 
     for (let i = 0; i < NUM_RUNS; i++) {
       if (payload.onProgress) {
