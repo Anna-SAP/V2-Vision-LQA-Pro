@@ -37,6 +37,13 @@ export const CompareView: React.FC<CompareViewProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const cleanDescription = (desc: string) => {
+    if (!desc) return '';
+    let cleaned = desc.replace(/\[Auto-Downgraded\]\s*/g, '');
+    cleaned = cleaned.replace(/\s*\(Reason:\s*Terminology ID not found in glossary\)/g, '');
+    return cleaned.trim();
+  };
+
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
   
@@ -240,7 +247,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
                           width: `${issue.boundingBox.width * 100}%`,
                           height: `${issue.boundingBox.height * 100}%`
                         }}
-                        title={issue.description}
+                        title={cleanDescription(issue.description)}
                       >
                         <span className={`absolute -top-6 left-0 text-[11px] text-white px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap z-30 font-mono transition-transform duration-200
                           ${issue.severity === 'Critical' ? 'bg-red-600' : 'bg-orange-500'}

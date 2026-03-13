@@ -25,6 +25,13 @@ interface JiraData {
   description: string;
 }
 
+const cleanDescription = (desc: string) => {
+  if (!desc) return '';
+  let cleaned = desc.replace(/\[Auto-Downgraded\]\s*/g, '');
+  cleaned = cleaned.replace(/\s*\(Reason:\s*Terminology ID not found in glossary\)/g, '');
+  return cleaned.trim();
+};
+
 const generateJiraData = (issue: QaIssue, targetLang: string, fileName: string): JiraData => {
   // Extract Product Prefix (first segment of filename)
   // e.g. "Uns_page_01" -> "UNS"
@@ -62,7 +69,7 @@ ${issue.suggestionsTarget?.join('\n') || 'N/A'}
 ${issue.suggestionRationale || 'N/A'}
 
 *Issue Detail:*
-${issue.description}
+${cleanDescription(issue.description)}
 
 !bug.png|thumbnail!`;
 
@@ -510,6 +517,7 @@ const IssueCard: React.FC<{
   };
 
   const isAutoRemoved = issue._meetsConsensus === false;
+  const isAiSuggestion = issue.isAutoDowngraded || issue.glossarySource === 'LLM Knowledge (Downgraded)' || issue.glossarySource === 'LLM Knowledge';
 
   return (
     <div 
@@ -528,9 +536,9 @@ const IssueCard: React.FC<{
           {getIcon(issue.severity)}
           <span className="font-bold text-sm text-slate-800">{issue.id}</span>
           <span className={`text-xs px-2 py-0.5 border rounded ${issue.issueCategory === 'Style' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white text-slate-500'}`}>{issue.issueCategory}</span>
-          {issue.issueCategory === 'Terminology' && issue.glossarySource && (
-            <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 border border-purple-200 rounded text-purple-600 truncate max-w-[200px]" title={issue.glossarySource}>
-              📋 {issue.glossarySource}
+          {(issue.issueCategory === 'Terminology' || isAiSuggestion) && issue.glossarySource && (
+            <span className={`text-[10px] px-1.5 py-0.5 border rounded truncate max-w-[200px] ${isAiSuggestion ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-purple-50 border-purple-200 text-purple-600'}`} title={issue.glossarySource}>
+              {isAiSuggestion ? '💡 AI Suggestion' : `📋 ${issue.glossarySource}`}
             </span>
           )}
           {isAutoRemoved && (
@@ -560,7 +568,14 @@ const IssueCard: React.FC<{
       </div>
       
       <p className="text-xs text-slate-500 mb-2 font-mono bg-white/50 p-1 rounded inline-block">{issue.location}</p>
-      <p className="text-sm text-slate-700 mb-3">{issue.description}</p>
+      <p className="text-sm text-slate-700 mb-3">{cleanDescription(issue.description)}</p>
+
+      {isAiSuggestion && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fffbeb', border: '1px solid #fcd34d', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>
+          <span style={{ color: '#92400e', fontWeight: 700 }}>💡 AI Suggestion</span>
+          <span style={{ color: '#92400e' }}>— Term not in loaded glossary, based on AI knowledge</span>
+        </div>
+      )}
 
       {issue.ruleId && issue.ruleId !== 'null' && (
         isValidRuleId(issue.ruleId) ? (

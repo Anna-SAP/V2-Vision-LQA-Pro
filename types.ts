@@ -45,6 +45,9 @@ export interface QaIssue {
   glossaryTermId?: string; // Unique ID (e.g. TERM-001) for strict hallucination prevention
   ruleId?: string; // For Style Guide issues
   ruleDescription?: string; // For Style Guide issues
+  isAutoDowngraded?: boolean; // Whether the issue was auto-downgraded by the hallucination guard
+  downgradeReason?: string; // Reason for auto-downgrade
+  _sanitized?: boolean; // Internal flag to prevent duplicate sanitization
   _count?: number; // Internal use for consensus filtering
   _meetsConsensus?: boolean;
 }

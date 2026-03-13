@@ -135,28 +135,33 @@ async function retryWithBackoff<T>(
 
 // Hallucination Guardrail
 const sanitizeReport = (report: any, glossaryText: string | undefined) => {
-  if (!glossaryText) return;
+  if (!report || !report.issues) return report;
+  if (!glossaryText) return report;
   
   const validIds = new Set<string>();
-  const matches = glossaryText.match(/\\[ID:TERM-\\d+\\]/g);
+  const matches = glossaryText.match(/\[ID:TERM-\d+\]/g);
   if (matches) {
     matches.forEach(id => validIds.add(id));
   }
 
   report.issues.forEach((issue: any) => {
+    if (issue._sanitized) return;
+
     if (issue.issueCategory === 'Terminology') {
       const termIdRaw = issue.glossaryTermId;
       const formattedId = termIdRaw ? `[ID:${termIdRaw}]` : null;
       const isValid = formattedId && validIds.has(formattedId);
 
       if (!isValid) {
-        issue.issueCategory = 'Style';
+        issue.issueCategory = 'Terminology'; // Keep it as Terminology, just mark it as Auto-Downgraded
         issue.severity = 'Minor';
-        issue.description = `[Auto-Downgraded] ${issue.description} (Reason: Terminology ID not found in glossary)`;
+        issue.isAutoDowngraded = true;
+        issue.downgradeReason = 'Terminology ID not found in glossary';
         issue.glossaryTermId = undefined;
-        issue.glossarySource = 'LLM Knowledge (Downgraded)';
+        issue.glossarySource = 'LLM Knowledge';
       }
     }
+    issue._sanitized = true;
   });
   
   const termIssues = report.issues.filter((i: any) => i.issueCategory === 'Terminology');

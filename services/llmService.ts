@@ -202,7 +202,8 @@ async function retryWithBackoff<T>(
 
 // Hallucination Guardrail: Sanitizes the report against the glossary ID
 const sanitizeReport = (report: ScreenshotReport, glossaryText: string | undefined) => {
-  if (!glossaryText) return;
+  if (!report || !report.issues) return report;
+  if (!glossaryText) return report;
   
   // Create a map of valid IDs to their source files
   // Looking for pattern [ID:TERM-xxx] ... [source: filename]
@@ -219,6 +220,8 @@ const sanitizeReport = (report: ScreenshotReport, glossaryText: string | undefin
   });
 
   report.issues.forEach(issue => {
+    if (issue._sanitized) return;
+
     if (issue.issueCategory === 'Terminology') {
       
       const termIdRaw = issue.glossaryTermId; // e.g. "TERM-001", "[ID:TERM-001]", or "001"
@@ -246,10 +249,11 @@ const sanitizeReport = (report: ScreenshotReport, glossaryText: string | undefin
         console.warn(`[Hallucination Guard] Downgrading Terminology issue ${issue.id} - Invalid ID: ${termIdRaw}`);
         issue.issueCategory = 'Terminology'; // Keep it as Terminology, just mark it as Auto-Downgraded
         issue.severity = 'Minor';
-        issue.description = `[Auto-Downgraded] ${issue.description} (Reason: Terminology ID not found in glossary)`;
+        issue.isAutoDowngraded = true;
+        issue.downgradeReason = 'Terminology ID not found in glossary';
         // Clear the fake ID
         issue.glossaryTermId = undefined;
-        issue.glossarySource = 'LLM Knowledge (Downgraded)';
+        issue.glossarySource = 'LLM Knowledge';
       } else {
         // Valid ID! Ensure the glossarySource is correct
         const correctSource = validIdsMap.get(formattedId!);
@@ -258,6 +262,7 @@ const sanitizeReport = (report: ScreenshotReport, glossaryText: string | undefin
         }
       }
     }
+    issue._sanitized = true;
   });
   
   // If no terminology issues remain, set terminology score to 5.

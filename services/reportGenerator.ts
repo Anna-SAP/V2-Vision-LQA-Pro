@@ -388,19 +388,45 @@ export const generateReportHtml = (
       return /^[A-Z]{2}-[A-Z]{2}_RULE_\d{5}$/.test(ruleId);
     };
 
-    const issueHtml = issues.map(issue => `
-      <div class="issue-card issue-${issue.severity.toLowerCase()}">
+    const cleanDescription = (desc: string) => {
+      if (!desc) return '';
+      let cleaned = desc.replace(/\[Auto-Downgraded\]\s*/g, '');
+      cleaned = cleaned.replace(/\s*\(Reason:\s*Terminology ID not found in glossary\)/g, '');
+      return cleaned.trim();
+    };
+
+    const issueHtml = issues.map(issue => {
+      const isAutoRemoved = issue._meetsConsensus === false;
+      const isAiSuggestion = issue.isAutoDowngraded || issue.glossarySource === 'LLM Knowledge (Downgraded)' || issue.glossarySource === 'LLM Knowledge';
+      
+      return `
+      <div class="issue-card issue-${issue.severity.toLowerCase()}" ${isAutoRemoved ? 'style="opacity: 0.5; filter: grayscale(100%);"' : ''}>
         <div class="issue-header">
             <div>
                 <span class="issue-id">${issue.id}</span>
                 <span class="issue-cat">${issue.issueCategory}</span>
-                ${issue.issueCategory === 'Terminology' && issue.glossarySource ? `<span class="issue-cat" style="background: #f3e8ff; color: #9333ea; border-color: #e9d5ff;">📋 ${issue.glossarySource}</span>` : ''}
+                ${(issue.issueCategory === 'Terminology' || isAiSuggestion) && issue.glossarySource ? `
+                  <span class="issue-cat" style="${isAiSuggestion ? 'background: #fffbeb; color: #b45309; border-color: #fde68a;' : 'background: #f3e8ff; color: #9333ea; border-color: #e9d5ff;'}">
+                    ${isAiSuggestion ? '💡 AI Suggestion' : `📋 ${issue.glossarySource}`}
+                  </span>
+                ` : ''}
+                ${isAutoRemoved ? `
+                  <span class="issue-cat" style="background: #f1f5f9; color: #64748b; border-color: #cbd5e1; font-weight: bold;">
+                    ✗ ${issue._count || 1}/3 — auto-removed
+                  </span>
+                ` : ''}
             </div>
             <span class="issue-sev sev-${issue.severity.toLowerCase()}">${issue.severity}</span>
         </div>
         ${issue.location ? `<div class="issue-loc">${issue.location}</div>` : ''}
-        <p class="issue-desc">${issue.description}</p>
-        ${issue._count && issue._count > 1 ? `
+        <p class="issue-desc">${cleanDescription(issue.description)}</p>
+        ${isAiSuggestion ? `
+        <div style="display:inline-flex; align-items:center; gap:6px; background:#fffbeb; border:1px solid #fcd34d; padding:4px 10px; border-radius:4px; font-size:12px; margin-bottom: 12px;">
+          <span style="color:#92400e; font-weight:700;">💡 AI Suggestion</span>
+          <span style="color:#92400e;">— Term not in loaded glossary, based on AI knowledge</span>
+        </div>
+        ` : ''}
+        ${!isAutoRemoved && issue._count && issue._count > 1 ? `
         <div style="display:inline-flex; align-items:center; gap:4px; background:#f0fdf4; border:1px solid #bbf7d0; padding:2px 8px; border-radius:4px; font-size:11px; color:#15803d; font-weight:600; margin-bottom: 12px; margin-right: 8px;">
           ✓ ${issue._count}/3 runs agreed
         </div>
@@ -441,7 +467,8 @@ export const generateReportHtml = (
         </div>
         ` : ''}
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     return `
       <!DOCTYPE html>
