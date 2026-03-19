@@ -619,6 +619,7 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
     // Ensure the ID matches the request for UI tracking
     // If model forgets to output screenshotId, we polyfill it here
     parsedReport.screenshotId = payload.screenshotId;
+    parsedReport.modelUsed = modelId;
     
     // Fallback: Ensure issues array exists
     if (!parsedReport.issues) parsedReport.issues = [];

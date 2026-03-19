@@ -54,6 +54,7 @@ export interface QaIssue {
 
 export interface ScreenshotReport {
   screenshotId: string;
+  modelUsed?: string;
   overall: {
     qualityLevel: 'Critical' | 'Poor' | 'Average' | 'Good' | 'Perfect';
     scores: QaScores;
