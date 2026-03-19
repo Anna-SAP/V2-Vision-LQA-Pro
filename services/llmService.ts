@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { LlmRequestPayload, LlmResponse, ScreenshotReport, QaIssue, StyleGuideRule } from '../types';
-import { getAnalysisSystemPrompt, LLM_MODEL_ID } from '../constants';
+import { getAnalysisSystemPrompt, LLM_MODEL_ID, LLM_FALLBACK_MODEL_ID } from '../constants';
 import { determineStrictQuality, enforceScoreConsistency } from './reportGenerator';
 import { retrieveSkills, formatSkillsForPrompt } from './lqaSkillBank';
 
@@ -333,8 +333,28 @@ Please verify each issue and return the verdict.
       }
     });
   } catch (error) {
-    console.warn("Gemini 3.1 Pro failed in Verifier. Returning initial report.", error);
-    return initialReport;
+    console.warn("Gemini 3.1 Pro failed in Verifier, switching to Fallback Model (Gemini 1.5 Pro)...", error);
+    try {
+      response = await ai.models.generateContent({
+        model: LLM_FALLBACK_MODEL_ID,
+        contents: {
+          parts: [
+            { inlineData: { mimeType: enImage.mimeType, data: enImage.data } },
+            { inlineData: { mimeType: deImage.mimeType, data: deImage.data } },
+            { text: userPrompt }
+          ]
+        },
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: verificationSchema,
+          temperature: 0.15,
+        }
+      });
+    } catch (fallbackError) {
+      console.error("[Verifier] Agent failed on fallback:", fallbackError);
+      return initialReport;
+    }
   }
 
   const responseText = response.text;
@@ -648,7 +668,12 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
         payload.onProgress(i + 1, NUM_RUNS);
       }
       let report: ScreenshotReport;
-      report = await retryWithBackoff(() => runAnalysis(LLM_MODEL_ID));
+      try {
+        report = await retryWithBackoff(() => runAnalysis(LLM_MODEL_ID));
+      } catch (error) {
+        console.warn(`Run ${i + 1} failed with Gemini 3.1 Pro, switching to Fallback Model (Gemini 1.5 Pro)...`, error);
+        report = await retryWithBackoff(() => runAnalysis(LLM_FALLBACK_MODEL_ID));
+      }
       allRuns.push(report.issues || []);
       if (!baseReport) baseReport = report;
     }

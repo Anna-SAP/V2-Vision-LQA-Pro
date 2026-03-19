@@ -212,8 +212,9 @@ Glossary Context: ${payload.glossaryText || 'None'}
 Please verify each issue and return the verdict.
   `;
 
+  let response;
   try {
-    const response = await ai.models.generateContent({
+    response = await ai.models.generateContent({
       model: "gemini-3.1-pro-preview",
       contents: {
         parts: [
@@ -229,8 +230,32 @@ Please verify each issue and return the verdict.
         temperature: 0.15,
       }
     });
+  } catch (error) {
+    console.warn("Gemini 3.1 Pro failed in Verifier, switching to Fallback Model (Gemini 1.5 Pro)...", error);
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-1.5-pro",
+        contents: {
+          parts: [
+            { inlineData: { mimeType: enImage.mimeType, data: enImage.data } },
+            { inlineData: { mimeType: deImage.mimeType, data: deImage.data } },
+            { text: userPrompt }
+          ]
+        },
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: verificationSchema,
+          temperature: 0.15,
+        }
+      });
+    } catch (fallbackError) {
+      console.error("[Verifier] Agent failed on fallback:", fallbackError);
+      return initialReport;
+    }
+  }
 
-    const responseText = response.text;
+  const responseText = response.text;
     if (!responseText) return initialReport;
 
     const cleanedText = responseText.replace(new RegExp('```json\\s*', 'g'), '').replace(new RegExp('```\\s*$', 'g'), '').trim();
@@ -297,22 +322,43 @@ export const analyzeScreenshot = functions.https.onCall({
       const userPrompt = payload.userPrompt;
       const skillsBlock = payload.skillsBlock;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-pro-preview",
-        contents: {
-          parts: [
-            { inlineData: { mimeType: enImage.mimeType, data: enImage.data } },
-            { inlineData: { mimeType: deImage.mimeType, data: deImage.data } },
-            { text: userPrompt }
-          ]
-        },
-        config: {
-          systemInstruction: systemPrompt,
-          responseMimeType: "application/json",
-          responseSchema: reportResponseSchema,
-          temperature: 0.15,
-        }
-      });
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: "gemini-3.1-pro-preview",
+          contents: {
+            parts: [
+              { inlineData: { mimeType: enImage.mimeType, data: enImage.data } },
+              { inlineData: { mimeType: deImage.mimeType, data: deImage.data } },
+              { text: userPrompt }
+            ]
+          },
+          config: {
+            systemInstruction: systemPrompt,
+            responseMimeType: "application/json",
+            responseSchema: reportResponseSchema,
+            temperature: 0.15,
+          }
+        });
+      } catch (error) {
+        console.warn("Gemini 3.1 Pro failed in Analysis, switching to Fallback Model (Gemini 1.5 Pro)...", error);
+        response = await ai.models.generateContent({
+          model: "gemini-1.5-pro",
+          contents: {
+            parts: [
+              { inlineData: { mimeType: enImage.mimeType, data: enImage.data } },
+              { inlineData: { mimeType: deImage.mimeType, data: deImage.data } },
+              { text: userPrompt }
+            ]
+          },
+          config: {
+            systemInstruction: systemPrompt,
+            responseMimeType: "application/json",
+            responseSchema: reportResponseSchema,
+            temperature: 0.15,
+          }
+        });
+      }
 
       const responseText = response.text;
       if (!responseText) {
