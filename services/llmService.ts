@@ -188,7 +188,7 @@ async function processImageUrl(url: string): Promise<ProcessedImage> {
 async function retryWithBackoff<T>(
   fn: () => Promise<T>, 
   retries = 2, 
-  delay = 1000
+  delay = 3000
 ): Promise<T> {
   try {
     return await fn();

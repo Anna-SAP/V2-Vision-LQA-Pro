@@ -421,7 +421,7 @@ const App: React.FC = () => {
       }
     };
 
-    const concurrency = 5;
+    const concurrency = 2;
     const queue = [...pendingItems];
     const workers = Array(concurrency).fill(null).map(async () => {
       while(queue.length > 0 && !signal.aborted) {
@@ -434,6 +434,7 @@ const App: React.FC = () => {
             success: success ? prev.success + 1 : prev.success,
             failed: success ? prev.failed : prev.failed + 1
           }));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
     });
