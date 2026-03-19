@@ -357,7 +357,7 @@ const App: React.FC = () => {
       updatePairStatus(pair.id, { status: 'analyzing', errorMessage: undefined });
 
       try {
-        const timeoutMs = 30000;
+        const timeoutMs = 120000;
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error(`Request timed out (${timeoutMs/1000}s)`)), timeoutMs)
         );
