@@ -231,10 +231,10 @@ Please verify each issue and return the verdict.
       }
     });
   } catch (error) {
-    console.warn("Gemini 3.1 Pro failed in Verifier, switching to Fallback Model (Gemini 1.5 Pro)...", error);
+    console.warn("Gemini 3.1 Pro failed in Verifier, switching to Fallback Model (Gemini 2.5 Pro)...", error);
     try {
       response = await ai.models.generateContent({
-        model: "gemini-1.5-pro",
+        model: "gemini-2.5-pro",
         contents: {
           parts: [
             { inlineData: { mimeType: enImage.mimeType, data: enImage.data } },
@@ -341,9 +341,9 @@ export const analyzeScreenshot = functions.https.onCall({
           }
         });
       } catch (error) {
-        console.warn("Gemini 3.1 Pro failed in Analysis, switching to Fallback Model (Gemini 1.5 Pro)...", error);
+        console.warn("Gemini 3.1 Pro failed in Analysis, switching to Fallback Model (Gemini 2.5 Pro)...", error);
         response = await ai.models.generateContent({
-          model: "gemini-1.5-pro",
+          model: "gemini-2.5-pro",
           contents: {
             parts: [
               { inlineData: { mimeType: enImage.mimeType, data: enImage.data } },

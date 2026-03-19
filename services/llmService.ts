@@ -333,7 +333,7 @@ Please verify each issue and return the verdict.
       }
     });
   } catch (error) {
-    console.warn("Gemini 3.1 Pro failed in Verifier, switching to Fallback Model (Gemini 1.5 Pro)...", error);
+    console.warn("Gemini 3.1 Pro failed in Verifier, switching to Fallback Model (Gemini 2.5 Pro)...", error);
     try {
       response = await ai.models.generateContent({
         model: LLM_FALLBACK_MODEL_ID,
@@ -672,7 +672,7 @@ export async function callTranslationQaLLM(payload: LlmRequestPayload): Promise<
       try {
         report = await retryWithBackoff(() => runAnalysis(LLM_MODEL_ID));
       } catch (error) {
-        console.warn(`Run ${i + 1} failed with Gemini 3.1 Pro, switching to Fallback Model (Gemini 1.5 Pro)...`, error);
+        console.warn(`Run ${i + 1} failed with Gemini 3.1 Pro, switching to Fallback Model (Gemini 2.5 Pro)...`, error);
         report = await retryWithBackoff(() => runAnalysis(LLM_FALLBACK_MODEL_ID));
       }
       allRuns.push(report.issues || []);
