@@ -5,6 +5,7 @@ import { CompareView } from './components/CompareView';
 import { GlossaryManager, GlossaryManagerRef } from './components/GlossaryManager';
 import { ScreenshotPair, LlmRequestPayload, BulkProcessingState, ScreenshotReport, AppLanguage, StyleGuideRule, BatchStats } from './types';
 import { callTranslationQaLLM } from './services/llmService';
+import { saveSession, loadSession, clearSession, saveSessionThrottled } from './services/sessionPersistence';
 import { generateReportHtml, generateExportFilename } from './services/reportGenerator';
 import { BatchProgressPanel } from './components/BatchProgressPanel';
 import { Layers, Activity, BookOpen, PanelLeftOpen, PanelLeftClose, PlayCircle, Globe, Loader2, RotateCcw, Trash2, GripVertical, BookDown } from 'lucide-react';
@@ -58,9 +59,101 @@ const App: React.FC = () => {
   const [batchStats, setBatchStats] = useState<BatchStats | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<{current: number, total: number} | null>(null);
   const glossaryManagerRef = useRef<GlossaryManagerRef>(null);
+  const [isRestoring, setIsRestoring] = useState(true);
 
   const t = UI_TEXT[appLanguage];
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // --- Session Persistence Logic ---
+  useEffect(() => {
+    loadSession().then(session => {
+      if (session && session.pairs && session.pairs.length > 0) {
+        // Restore pairs (revert 'analyzing' to 'pending' since analysis was interrupted)
+        const restoredPairs = session.pairs.map(p => ({
+          ...p,
+          status: p.status === 'analyzing' ? 'pending' : p.status
+        })) as ScreenshotPair[];
+        
+        setPairs(restoredPairs);
+        setSelectedPairId(restoredPairs[0]?.id || null);
+        
+        if (session.glossaryText) setGlossaryText(session.glossaryText);
+        if (session.styleGuideRules) setStyleGuideRules(session.styleGuideRules);
+        
+        console.log(`[Session] Restored ${restoredPairs.length} pairs from IndexedDB (saved at ${new Date(session.savedAt).toLocaleString()})`);
+      }
+      setIsRestoring(false);
+    }).catch(err => {
+      console.error('[Session] Failed to restore:', err);
+      setIsRestoring(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    // Do not save before restoration is complete to avoid overwriting with empty data
+    if (isRestoring) return;
+    // Do not save if there is no data
+    if (pairs.length === 0 && !glossaryText) return;
+    
+    saveSessionThrottled({
+      pairs: pairs.map(p => ({
+        id: p.id,
+        fileName: p.fileName,
+        enImageBase64: p.enImageUrl,
+        deImageBase64: p.deImageUrl,
+        targetLanguage: p.targetLanguage,
+        status: p.status,
+        report: p.report,
+        errorMessage: p.errorMessage,
+        reverifySuggested: p.reverifySuggested,
+        isReverified: p.isReverified
+      })),
+      glossaryText,
+      styleGuideRules,
+      glossaryLoadedFiles: [],  // GlossaryManager loadedFiles are not persisted for now
+      savedAt: Date.now()
+    });
+  }, [pairs, glossaryText, styleGuideRules, isRestoring]);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (pairs.length > 0) {
+        e.preventDefault();
+        // Modern browsers ignore custom messages, but require returnValue to be set
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [pairs]);
+
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'hidden' && pairs.length > 0) {
+        // Save immediately, bypass throttle
+        saveSession({
+          pairs: pairs.map(p => ({
+            id: p.id,
+            fileName: p.fileName,
+            enImageBase64: p.enImageUrl,
+            deImageBase64: p.deImageUrl,
+            targetLanguage: p.targetLanguage,
+            status: p.status,
+            report: p.report,
+            errorMessage: p.errorMessage,
+            reverifySuggested: p.reverifySuggested,
+            isReverified: p.isReverified
+          })),
+          glossaryText,
+          styleGuideRules,
+          glossaryLoadedFiles: [],
+          savedAt: Date.now()
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, [pairs, glossaryText, styleGuideRules]);
 
   // --- Resizing Logic ---
   const startResizingRight = useCallback((e: React.MouseEvent) => {
@@ -149,6 +242,7 @@ const App: React.FC = () => {
         errors: [],
         isComplete: false
     });
+    clearSession();
     // Note: We deliberately do NOT clear glossaryText here to allow persistence if user just made a mistake with Screenshots.
     // Use the "Clear" button in GlossaryManager for that.
   };

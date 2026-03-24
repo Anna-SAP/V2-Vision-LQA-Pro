@@ -9,6 +9,16 @@ interface UploadAreaProps {
   t: any;
 }
 
+// Helper: Convert Blob to Base64 Data URL
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
 // Helper: Normalize filenames for pairing
 const normalizeName = (fileName: string): string => {
   const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
@@ -28,7 +38,7 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
       const JSZip = (await import('jszip')).default;
 
       // Helper to match pairs within map
-      const createPairsFromMaps = (
+      const createPairsFromMaps = async (
         enImages: Map<string, Blob>, 
         targetImages: Map<string, Blob>, 
         lang: SupportedLocale
@@ -40,7 +50,7 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
             targetLookup.set(normalizeName(name), blob);
          });
 
-         enImages.forEach((enBlob, enFileName) => {
+         for (const [enFileName, enBlob] of enImages.entries()) {
             const normalizedEn = normalizeName(enFileName);
             let targetBlob = targetImages.get(enFileName);
             
@@ -54,13 +64,13 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
               pairs.push({
                 id: Math.random().toString(36).substr(2, 9),
                 fileName: displayName,
-                enImageUrl: URL.createObjectURL(enBlob),
-                deImageUrl: URL.createObjectURL(targetBlob),
+                enImageUrl: await blobToBase64(enBlob),
+                deImageUrl: await blobToBase64(targetBlob),
                 targetLanguage: lang,
                 status: 'pending'
               });
             }
-          });
+          }
           return pairs;
       };
 
@@ -95,11 +105,11 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
             
             if (deZipFile) {
                 const deImages = await loadZipImages(deZipFile);
-                newPairs.push(...createPairsFromMaps(enImages, deImages, 'de-DE'));
+                newPairs.push(...await createPairsFromMaps(enImages, deImages, 'de-DE'));
             }
             if (frZipFile) {
                 const frImages = await loadZipImages(frZipFile);
-                newPairs.push(...createPairsFromMaps(enImages, frImages, 'fr-FR'));
+                newPairs.push(...await createPairsFromMaps(enImages, frImages, 'fr-FR'));
             }
         }
       }
@@ -110,7 +120,7 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
         const deFiles = images.filter(f => /de/i.test(f.name));
         const frFiles = images.filter(f => /fr/i.test(f.name));
 
-        enFiles.forEach(enFile => {
+        for (const enFile of enFiles) {
           const normEn = normalizeName(enFile.name);
           const displayName = normEn.charAt(0).toUpperCase() + normEn.slice(1);
 
@@ -119,8 +129,8 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
              newPairs.push({
                id: Math.random().toString(36).substr(2, 9),
                fileName: displayName,
-               enImageUrl: URL.createObjectURL(enFile),
-               deImageUrl: URL.createObjectURL(deMatch),
+               enImageUrl: await blobToBase64(enFile),
+               deImageUrl: await blobToBase64(deMatch),
                targetLanguage: 'de-DE',
                status: 'pending'
              });
@@ -131,13 +141,13 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
              newPairs.push({
                id: Math.random().toString(36).substr(2, 9),
                fileName: displayName,
-               enImageUrl: URL.createObjectURL(enFile),
-               deImageUrl: URL.createObjectURL(frMatch),
+               enImageUrl: await blobToBase64(enFile),
+               deImageUrl: await blobToBase64(frMatch),
                targetLanguage: 'fr-FR',
                status: 'pending'
              });
           }
-        });
+        }
 
         if (newPairs.length === 0 && images.length === 2 && enFiles.length === 1) {
            const targetFile = deFiles[0] || frFiles[0];
@@ -149,8 +159,8 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
                 newPairs.push({
                     id: Math.random().toString(36).substr(2, 9),
                     fileName: displayName,
-                    enImageUrl: URL.createObjectURL(enFiles[0]),
-                    deImageUrl: URL.createObjectURL(targetFile),
+                    enImageUrl: await blobToBase64(enFiles[0]),
+                    deImageUrl: await blobToBase64(targetFile),
                     targetLanguage: lang,
                     status: 'pending'
                 });
