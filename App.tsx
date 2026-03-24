@@ -60,6 +60,8 @@ const App: React.FC = () => {
   const [analysisProgress, setAnalysisProgress] = useState<{current: number, total: number} | null>(null);
   const glossaryManagerRef = useRef<GlossaryManagerRef>(null);
   const [isRestoring, setIsRestoring] = useState(true);
+  const [restoredGlossaryFiles, setRestoredGlossaryFiles] = useState<any[]>([]);
+  const [glossaryLoadedFiles, setGlossaryLoadedFiles] = useState<any[]>([]);
 
   const t = UI_TEXT[appLanguage];
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -70,8 +72,16 @@ const App: React.FC = () => {
       if (session && session.pairs && session.pairs.length > 0) {
         // Restore pairs (revert 'analyzing' to 'pending' since analysis was interrupted)
         const restoredPairs = session.pairs.map(p => ({
-          ...p,
-          status: p.status === 'analyzing' ? 'pending' : p.status
+          id: p.id,
+          fileName: p.fileName,
+          enImageUrl: p.enImageBase64,
+          deImageUrl: p.deImageBase64,
+          targetLanguage: p.targetLanguage,
+          status: p.status === 'analyzing' ? 'pending' : p.status,
+          report: p.report,
+          errorMessage: p.errorMessage,
+          reverifySuggested: p.reverifySuggested,
+          isReverified: p.isReverified
         })) as ScreenshotPair[];
         
         setPairs(restoredPairs);
@@ -79,6 +89,9 @@ const App: React.FC = () => {
         
         if (session.glossaryText) setGlossaryText(session.glossaryText);
         if (session.styleGuideRules) setStyleGuideRules(session.styleGuideRules);
+        if (session.glossaryLoadedFiles && session.glossaryLoadedFiles.length > 0) {
+          setRestoredGlossaryFiles(session.glossaryLoadedFiles);
+        }
         
         console.log(`[Session] Restored ${restoredPairs.length} pairs from IndexedDB (saved at ${new Date(session.savedAt).toLocaleString()})`);
       }
@@ -110,10 +123,10 @@ const App: React.FC = () => {
       })),
       glossaryText,
       styleGuideRules,
-      glossaryLoadedFiles: [],  // GlossaryManager loadedFiles are not persisted for now
+      glossaryLoadedFiles: glossaryLoadedFiles,
       savedAt: Date.now()
     });
-  }, [pairs, glossaryText, styleGuideRules, isRestoring]);
+  }, [pairs, glossaryText, styleGuideRules, glossaryLoadedFiles, isRestoring]);
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -146,14 +159,14 @@ const App: React.FC = () => {
           })),
           glossaryText,
           styleGuideRules,
-          glossaryLoadedFiles: [],
+          glossaryLoadedFiles: glossaryLoadedFiles,
           savedAt: Date.now()
         });
       }
     };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
-  }, [pairs, glossaryText, styleGuideRules]);
+  }, [pairs, glossaryText, styleGuideRules, glossaryLoadedFiles]);
 
   // --- Resizing Logic ---
   const startResizingRight = useCallback((e: React.MouseEvent) => {
@@ -797,6 +810,8 @@ const App: React.FC = () => {
               onStyleGuideUpdate={setStyleGuideRules}
               onLangDetected={setGlossaryDetectedLang}
               t={t}
+              initialLoadedFiles={restoredGlossaryFiles}
+              onLoadedFilesChange={setGlossaryLoadedFiles}
             />
           </div>
 

@@ -16,6 +16,8 @@ interface GlossaryManagerProps {
   onStyleGuideUpdate?: (rules: StyleGuideRule[]) => void;
   onLangDetected?: (lang: 'de-DE' | 'fr-FR' | null) => void;
   t: any;
+  initialLoadedFiles?: LoadedFile[];
+  onLoadedFilesChange?: (files: LoadedFile[]) => void;
 }
 
 interface GlossaryHistoryItem {
@@ -34,7 +36,7 @@ interface LoadedFile {
   rules?: StyleGuideRule[]; // For style guide
 }
 
-export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, styleGuideRules = [], onStyleGuideUpdate, onLangDetected, t }, ref) => {
+export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, styleGuideRules = [], onStyleGuideUpdate, onLangDetected, t, initialLoadedFiles, onLoadedFilesChange }, ref) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'import'>('import'); // Default to import
   const [isDragging, setIsDragging] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -45,6 +47,12 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
 
   const [history, setHistory] = useState<GlossaryHistoryItem[]>([]);
   const [totalTerms, setTotalTerms] = useState(0);
+
+  useEffect(() => {
+    if (initialLoadedFiles && initialLoadedFiles.length > 0 && loadedFiles.length === 0) {
+      setLoadedFiles(initialLoadedFiles);
+    }
+  }, [initialLoadedFiles]);
 
   useEffect(() => {
     try {
@@ -61,7 +69,10 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
     if (activeTab === 'import') {
         recompileGlossary(loadedFiles);
     }
-  }, [loadedFiles]);
+    if (onLoadedFilesChange) {
+      onLoadedFilesChange(loadedFiles);
+    }
+  }, [loadedFiles, activeTab, onLoadedFilesChange]);
 
   const saveToHistory = (name: string, content: string, count: number) => {
     const newItem: GlossaryHistoryItem = {
