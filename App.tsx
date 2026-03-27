@@ -123,33 +123,36 @@ const App: React.FC = () => {
   const runTokenRef = useRef<number>(0);
 
   // --- Session Persistence Logic ---
+  const hasPersistableSessionData = pairs.length > 0 || glossaryText.trim().length > 0 || styleGuideRules.length > 0 || glossaryLoadedFiles.length > 0;
+
   useEffect(() => {
     loadSession().then(session => {
-      if (session && session.pairs && session.pairs.length > 0) {
-        // Restore pairs (revert 'analyzing' to 'pending' since analysis was interrupted)
-        const restoredPairs = session.pairs.map(p => ({
-          id: p.id,
-          fileName: p.fileName,
-          enImageUrl: p.enImageBase64,
-          deImageUrl: p.deImageBase64,
-          targetLanguage: p.targetLanguage,
-          status: p.status === 'analyzing' ? 'pending' : p.status,
-          report: p.report,
-          errorMessage: p.errorMessage,
-          reverifySuggested: p.reverifySuggested,
-          isReverified: p.isReverified
-        })) as ScreenshotPair[];
-        
-        setPairs(restoredPairs);
-        setSelectedPairId(restoredPairs[0]?.id || null);
+      if (session) {
+        if (session.pairs && session.pairs.length > 0) {
+          // Restore pairs (revert 'analyzing' to 'pending' since analysis was interrupted)
+          const restoredPairs = session.pairs.map(p => ({
+            id: p.id,
+            fileName: p.fileName,
+            enImageUrl: p.enImageBase64,
+            deImageUrl: p.deImageBase64,
+            targetLanguage: p.targetLanguage,
+            status: p.status === 'analyzing' ? 'pending' : p.status,
+            report: p.report,
+            errorMessage: p.errorMessage,
+            reverifySuggested: p.reverifySuggested,
+            isReverified: p.isReverified
+          })) as ScreenshotPair[];
+          
+          setPairs(restoredPairs);
+          setSelectedPairId(restoredPairs[0]?.id || null);
+          console.log(`[Session] Restored ${restoredPairs.length} pairs from IndexedDB (saved at ${new Date(session.savedAt).toLocaleString()})`);
+        }
         
         if (session.glossaryText) setGlossaryText(session.glossaryText);
         if (session.styleGuideRules) setStyleGuideRules(session.styleGuideRules);
         if (session.glossaryLoadedFiles && session.glossaryLoadedFiles.length > 0) {
           setRestoredGlossaryFiles(session.glossaryLoadedFiles);
         }
-        
-        console.log(`[Session] Restored ${restoredPairs.length} pairs from IndexedDB (saved at ${new Date(session.savedAt).toLocaleString()})`);
       }
       setIsRestoring(false);
     }).catch(err => {
@@ -162,7 +165,7 @@ const App: React.FC = () => {
     // Do not save before restoration is complete to avoid overwriting with empty data
     if (isRestoring) return;
     // Do not save if there is no data
-    if (pairs.length === 0 && !glossaryText) return;
+    if (!hasPersistableSessionData) return;
     
     saveSessionThrottled({
       pairs: pairs.map(p => ({
@@ -182,11 +185,11 @@ const App: React.FC = () => {
       glossaryLoadedFiles: glossaryLoadedFiles,
       savedAt: Date.now()
     });
-  }, [pairs, glossaryText, styleGuideRules, glossaryLoadedFiles, isRestoring]);
+  }, [pairs, glossaryText, styleGuideRules, glossaryLoadedFiles, isRestoring, hasPersistableSessionData]);
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (pairs.length > 0) {
+      if (hasPersistableSessionData) {
         e.preventDefault();
         // Modern browsers ignore custom messages, but require returnValue to be set
         e.returnValue = '';
@@ -194,11 +197,11 @@ const App: React.FC = () => {
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [pairs]);
+  }, [hasPersistableSessionData]);
 
   useEffect(() => {
     const handler = () => {
-      if (document.visibilityState === 'hidden' && pairs.length > 0) {
+      if (document.visibilityState === 'hidden' && !isRestoring && hasPersistableSessionData) {
         // Save immediately, bypass throttle
         saveSession({
           pairs: pairs.map(p => ({
@@ -222,7 +225,7 @@ const App: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
-  }, [pairs, glossaryText, styleGuideRules, glossaryLoadedFiles]);
+  }, [pairs, glossaryText, styleGuideRules, glossaryLoadedFiles, isRestoring, hasPersistableSessionData]);
 
   // --- Resizing Logic ---
   const startResizingRight = useCallback((e: React.MouseEvent) => {
@@ -332,15 +335,24 @@ const App: React.FC = () => {
         // Clear initialization state to show onboarding again
         localStorage.removeItem('vision_lqa_initialized');
         setShowOnboarding(true);
+        
+        // Clear session persistence
+        await clearSession();
+    } else {
+        // If preserving context, we still need to update the session to remove pairs
+        saveSessionThrottled({
+            pairs: [],
+            glossaryText,
+            styleGuideRules,
+            glossaryLoadedFiles,
+            savedAt: Date.now()
+        });
     }
-
-    // Clear session persistence
-    await clearSession();
   };
 
   // Start Over Logic (Explicitly clears everything)
   const handleStartOver = async () => {
-    if (pairs.length > 0 || glossaryLoadedFiles.length > 0 || glossaryText) {
+    if (hasPersistableSessionData) {
         const confirmed = await showConfirm(
             "Start Over",
             "Are you sure you want to start over? This will clear ALL current screenshots, reports, and project context."
@@ -521,10 +533,12 @@ const App: React.FC = () => {
   };
 
   const handleCancelBulk = () => {
+    runTokenRef.current += 1;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     setBulkState(prev => ({ ...prev, isProcessing: false, isComplete: true }));
+    setBatchStats(prev => prev ? { ...prev, isActive: false, isComplete: true, endTime: Date.now() } : null);
   };
 
   const startBulkAnalysis = async () => {
@@ -560,9 +574,10 @@ const App: React.FC = () => {
 
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
+    const currentToken = runTokenRef.current;
 
     const processItem = async (pair: ScreenshotPair, retries = 2): Promise<boolean> => {
-      if (signal.aborted) return false;
+      if (signal.aborted || currentToken !== runTokenRef.current) return false;
       updatePairStatus(pair.id, { status: 'analyzing', errorMessage: undefined });
 
       try {
@@ -585,6 +600,8 @@ const App: React.FC = () => {
            callTranslationQaLLM(payload),
            timeoutPromise
         ]);
+
+        if (signal.aborted || currentToken !== runTokenRef.current) return false;
 
         const report = response.report;
         const issues = report.issues || [];
@@ -615,7 +632,8 @@ const App: React.FC = () => {
         return true;
 
       } catch (error: any) {
-        if (retries > 0 && !signal.aborted) {
+        if (signal.aborted || currentToken !== runTokenRef.current) return false;
+        if (retries > 0) {
           return processItem(pair, retries - 1);
         }
         
@@ -633,10 +651,11 @@ const App: React.FC = () => {
     const concurrency = 2;
     const queue = [...pendingItems];
     const workers = Array(concurrency).fill(null).map(async () => {
-      while(queue.length > 0 && !signal.aborted) {
+      while(queue.length > 0 && !signal.aborted && currentToken === runTokenRef.current) {
         const item = queue.shift();
         if (item) {
           const success = await processItem(item);
+          if (signal.aborted || currentToken !== runTokenRef.current) break;
           setBulkState(prev => ({
             ...prev,
             completed: prev.completed + 1,
@@ -649,6 +668,7 @@ const App: React.FC = () => {
     });
 
     await Promise.all(workers);
+    if (signal.aborted || currentToken !== runTokenRef.current) return;
     setBulkState(prev => ({ ...prev, isProcessing: false, isComplete: true }));
     setBatchStats(prev => prev ? { ...prev, isActive: false, isComplete: true, endTime: Date.now() } : null);
     abortControllerRef.current = null;
