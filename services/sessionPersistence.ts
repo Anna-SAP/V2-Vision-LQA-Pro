@@ -1,4 +1,4 @@
-import { ScreenshotReport, StyleGuideRule } from '../types';
+import { ScreenshotReport, StyleGuideRule, LoadedGlossaryFile } from '../types';
 
 export interface PersistedSession {
   pairs: Array<{
@@ -15,14 +15,7 @@ export interface PersistedSession {
   }>;
   glossaryText: string;
   styleGuideRules: StyleGuideRule[];
-  glossaryLoadedFiles: Array<{
-    id: string;
-    name: string;
-    count: number;
-    type: 'glossary' | 'styleguide';
-    terms: string[];
-    rules?: StyleGuideRule[];
-  }>;
+  glossaryLoadedFiles: LoadedGlossaryFile[];
   savedAt: number;
 }
 

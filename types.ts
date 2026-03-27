@@ -25,6 +25,15 @@ export interface StyleGuideRule {
   notes?: string;
 }
 
+export interface LoadedGlossaryFile {
+  id: string;
+  name: string;
+  count: number;
+  type: 'glossary' | 'styleguide';
+  terms: string[]; // Array of "Source = Target"
+  rules?: StyleGuideRule[]; // For style guide
+}
+
 export interface QaIssue {
   id: string;
   location: string;

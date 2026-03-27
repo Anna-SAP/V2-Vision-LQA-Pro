@@ -3,7 +3,7 @@ import { UploadArea } from './components/UploadArea';
 import { PairList } from './components/PairList';
 import { CompareView } from './components/CompareView';
 import { GlossaryManager, GlossaryManagerRef } from './components/GlossaryManager';
-import { ScreenshotPair, LlmRequestPayload, BulkProcessingState, ScreenshotReport, AppLanguage, StyleGuideRule, BatchStats } from './types';
+import { ScreenshotPair, LlmRequestPayload, BulkProcessingState, ScreenshotReport, AppLanguage, StyleGuideRule, BatchStats, LoadedGlossaryFile } from './types';
 import { callTranslationQaLLM } from './services/llmService';
 import { saveSession, loadSession, clearSession, saveSessionThrottled } from './services/sessionPersistence';
 import { generateReportHtml, generateExportFilename } from './services/reportGenerator';
@@ -60,8 +60,8 @@ const App: React.FC = () => {
   const [analysisProgress, setAnalysisProgress] = useState<{current: number, total: number} | null>(null);
   const glossaryManagerRef = useRef<GlossaryManagerRef>(null);
   const [isRestoring, setIsRestoring] = useState(true);
-  const [restoredGlossaryFiles, setRestoredGlossaryFiles] = useState<any[]>([]);
-  const [glossaryLoadedFiles, setGlossaryLoadedFiles] = useState<any[]>([]);
+  const [restoredGlossaryFiles, setRestoredGlossaryFiles] = useState<LoadedGlossaryFile[]>([]);
+  const [glossaryLoadedFiles, setGlossaryLoadedFiles] = useState<LoadedGlossaryFile[]>([]);
 
   // Custom Dialog State
   const [dialogConfig, setDialogConfig] = useState<{
@@ -938,7 +938,6 @@ const App: React.FC = () => {
               ref={glossaryManagerRef}
               currentGlossary={glossaryText}
               onUpdate={setGlossaryText}
-              styleGuideRules={styleGuideRules}
               onStyleGuideUpdate={setStyleGuideRules}
               onLangDetected={setGlossaryDetectedLang}
               t={t}

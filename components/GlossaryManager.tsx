@@ -3,7 +3,7 @@ import { FileSpreadsheet, Upload, History, Trash2, Check, AlertCircle, FileText,
 import * as XLSX from 'xlsx';
 import { PRESET_GLOSSARIES } from '../services/terminologyManifest';
 
-import { StyleGuideRule } from '../types';
+import { StyleGuideRule, LoadedGlossaryFile } from '../types';
 
 export interface GlossaryManagerRef {
   loadPreset: (lang: 'fr-FR' | 'de-DE') => Promise<void>;
@@ -13,12 +13,11 @@ export interface GlossaryManagerRef {
 interface GlossaryManagerProps {
   currentGlossary: string;
   onUpdate: (text: string) => void;
-  styleGuideRules?: StyleGuideRule[];
   onStyleGuideUpdate?: (rules: StyleGuideRule[]) => void;
   onLangDetected?: (lang: 'de-DE' | 'fr-FR' | null) => void;
   t: any;
-  initialLoadedFiles?: LoadedFile[];
-  onLoadedFilesChange?: (files: LoadedFile[]) => void;
+  initialLoadedFiles?: LoadedGlossaryFile[];
+  onLoadedFilesChange?: (files: LoadedGlossaryFile[]) => void;
   onConfirm?: (title: string, msg: string) => Promise<boolean>;
 }
 
@@ -29,23 +28,14 @@ interface GlossaryHistoryItem {
   content: string;
 }
 
-interface LoadedFile {
-  id: string;
-  name: string;
-  count: number;
-  type: 'glossary' | 'styleguide';
-  terms: string[]; // Array of "Source = Target"
-  rules?: StyleGuideRule[]; // For style guide
-}
-
-export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, styleGuideRules = [], onStyleGuideUpdate, onLangDetected, t, initialLoadedFiles, onLoadedFilesChange, onConfirm }, ref) => {
+export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, onStyleGuideUpdate, onLangDetected, t, initialLoadedFiles, onLoadedFilesChange, onConfirm }, ref) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'import'>('import'); // Default to import
   const [isDragging, setIsDragging] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [uploadMode, setUploadMode] = useState<'replace' | 'append'>('append'); // Default to append usually safer
-  const [loadedFiles, setLoadedFiles] = useState<LoadedFile[]>([]);
+  const [loadedFiles, setLoadedFiles] = useState<LoadedGlossaryFile[]>([]);
 
   const [history, setHistory] = useState<GlossaryHistoryItem[]>([]);
   const [totalTerms, setTotalTerms] = useState(0);
@@ -67,22 +57,74 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
     }
   }, []);
 
+  const detectLanguageFromFile = (filename: string): 'de-DE' | 'fr-FR' | null => {
+      const lower = filename.toLowerCase();
+      if (lower.includes('de') || lower.includes('ger') || lower.includes('deutsch')) return 'de-DE';
+      if (lower.includes('fr') || lower.includes('fre') || lower.includes('french')) return 'fr-FR';
+      return null;
+  };
+
+  // Derived State Helpers
+  const extractStyleGuideRules = (files: LoadedGlossaryFile[]): StyleGuideRule[] => {
+      return files
+          .filter(f => f.type === 'styleguide' && f.rules)
+          .flatMap(f => f.rules as StyleGuideRule[]);
+  };
+
+  const detectLanguageFromFiles = (files: LoadedGlossaryFile[]): 'de-DE' | 'fr-FR' | null => {
+      const fileLangs = new Set<'de-DE' | 'fr-FR'>();
+      files.forEach(file => {
+          const detected = detectLanguageFromFile(file.name);
+          if (detected) fileLangs.add(detected);
+      });
+      if (fileLangs.has('de-DE') && !fileLangs.has('fr-FR')) return 'de-DE';
+      if (fileLangs.has('fr-FR') && !fileLangs.has('de-DE')) return 'fr-FR';
+      return null;
+  };
+
+  const compileGlossaryText = (files: LoadedGlossaryFile[]): { text: string, count: number } => {
+      if (files.length === 0) return { text: "", count: 0 };
+      const termMap = new Map<string, string>();
+      let termCounter = 1;
+
+      files.forEach(file => {
+          file.terms.forEach(line => {
+              const parts = line.split('=');
+              if (parts.length >= 2) {
+                  const sourceKey = parts[0].trim().toLowerCase();
+                  const termId = `TERM-${String(termCounter++).padStart(3, '0')}`;
+                  termMap.set(sourceKey, `[ID:${termId}] ${line} [source: ${file.name}]`);
+              }
+          });
+      });
+      const uniqueTerms = Array.from(termMap.values());
+      return { text: uniqueTerms.join('\n'), count: uniqueTerms.length };
+  };
+
+  // Synchronize derived state
   useEffect(() => {
-    if (activeTab === 'import') {
-        recompileGlossary(loadedFiles);
-        
-        // Sync style guide rules to parent
-        if (onStyleGuideUpdate) {
-            const allRules = loadedFiles
-                .filter(f => f.type === 'styleguide' && f.rules)
-                .flatMap(f => f.rules as StyleGuideRule[]);
-            onStyleGuideUpdate(allRules);
-        }
-    }
-    if (onLoadedFilesChange) {
-      onLoadedFilesChange(loadedFiles);
-    }
-  }, [loadedFiles, activeTab, onLoadedFilesChange, onStyleGuideUpdate]);
+      // 1. Sync loaded files to parent
+      if (onLoadedFilesChange) {
+          onLoadedFilesChange(loadedFiles);
+      }
+
+      // 2. Sync style guide rules to parent
+      if (onStyleGuideUpdate) {
+          onStyleGuideUpdate(extractStyleGuideRules(loadedFiles));
+      }
+
+      // 3. Sync detected language to parent
+      if (onLangDetected) {
+          onLangDetected(detectLanguageFromFiles(loadedFiles));
+      }
+
+      // 4. Recompile glossary text (only update parent if in import tab, per product requirement)
+      if (activeTab === 'import') {
+          const { text, count } = compileGlossaryText(loadedFiles);
+          setTotalTerms(count);
+          onUpdate(text);
+      }
+  }, [loadedFiles, activeTab, onLoadedFilesChange, onStyleGuideUpdate, onLangDetected, onUpdate]);
 
   const saveToHistory = (name: string, content: string, count: number) => {
     const newItem: GlossaryHistoryItem = {
@@ -94,55 +136,6 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
     const newHistory = [newItem, ...history].slice(0, 3);
     setHistory(newHistory);
     localStorage.setItem('vision_lqa_glossary_history', JSON.stringify(newHistory));
-  };
-
-  const detectLanguageFromFile = (filename: string): 'de-DE' | 'fr-FR' | null => {
-      const lower = filename.toLowerCase();
-      if (lower.includes('de') || lower.includes('ger') || lower.includes('deutsch')) return 'de-DE';
-      if (lower.includes('fr') || lower.includes('fre') || lower.includes('french')) return 'fr-FR';
-      return null;
-  };
-
-  const recompileGlossary = (files: LoadedFile[]) => {
-    if (files.length === 0) {
-        setTotalTerms(0);
-        onUpdate("");
-        if (onLangDetected) onLangDetected(null);
-        return;
-    }
-
-    const termMap = new Map<string, string>();
-    const fileLangs = new Set<'de-DE' | 'fr-FR'>();
-    let termCounter = 1; // Global counter for unique IDs across all files
-
-    files.forEach(file => {
-        const detected = detectLanguageFromFile(file.name);
-        if (detected) fileLangs.add(detected);
-
-        file.terms.forEach(line => {
-            const parts = line.split('=');
-            if (parts.length >= 2) {
-                const sourceKey = parts[0].trim().toLowerCase();
-                // Generate Unique ID e.g. TERM-001
-                const termId = `TERM-${String(termCounter++).padStart(3, '0')}`;
-                // Tag each term with ID and source file for traceability and grounding
-                // Format: [ID:TERM-001] Source = Target [source: filename]
-                termMap.set(sourceKey, `[ID:${termId}] ${line} [source: ${file.name}]`);
-            }
-        });
-    });
-
-    if (onLangDetected) {
-        if (fileLangs.has('de-DE') && !fileLangs.has('fr-FR')) onLangDetected('de-DE');
-        else if (fileLangs.has('fr-FR') && !fileLangs.has('de-DE')) onLangDetected('fr-FR');
-        else onLangDetected(null);
-    }
-
-    const uniqueTerms = Array.from(termMap.values());
-    const mergedContent = uniqueTerms.join('\n');
-    
-    setTotalTerms(uniqueTerms.length);
-    onUpdate(mergedContent);
   };
 
   const handleResetContext = async (e: React.MouseEvent) => {
@@ -227,7 +220,7 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
       const result = await processFileContent(file);
       const content = result.type === 'glossary' ? result.terms.join('\n') : '';
 
-      const newFileObj: LoadedFile = {
+      const newFileObj: LoadedGlossaryFile = {
           id: Math.random().toString(36).substr(2, 9),
           name: file.name,
           count: result.type === 'glossary' ? result.terms.length : result.rules.length,
@@ -279,7 +272,7 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
             throw new Error(`No presets found for ${lang}`);
         }
 
-        const newFiles: LoadedFile[] = [];
+        const newFiles: LoadedGlossaryFile[] = [];
         
         // Cache busting timestamp
         const cacheBuster = `?t=${Date.now()}`;
