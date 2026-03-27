@@ -7,6 +7,7 @@ import { ScreenshotPair, SupportedLocale } from '../types';
 interface UploadAreaProps {
   onPairsCreated: (pairs: ScreenshotPair[]) => void;
   t: any;
+  onError?: (msg: string) => void;
 }
 
 // Helper: Convert Blob to Base64 Data URL
@@ -25,7 +26,7 @@ const normalizeName = (fileName: string): string => {
   return nameWithoutExt.replace(/[._-]?(en|de|fr)([-_]?[a-z]{2})?$/i, '').toLowerCase();
 };
 
-export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => {
+export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t, onError }) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const processFiles = async (files: File[]) => {
@@ -171,12 +172,20 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onPairsCreated, t }) => 
       if (newPairs.length > 0) {
         onPairsCreated(newPairs);
       } else {
-        alert("No matching pairs found. Please check filenames (e.g. 'Home_en.png' vs 'Home_fr.png') or upload valid zip archives containing matching images.");
+        if (onError) {
+          onError("No matching pairs found. Please check filenames (e.g. 'Home_en.png' vs 'Home_fr.png') or upload valid zip archives containing matching images.");
+        } else {
+          alert("No matching pairs found. Please check filenames (e.g. 'Home_en.png' vs 'Home_fr.png') or upload valid zip archives containing matching images.");
+        }
       }
 
     } catch (error) {
       console.error("File processing error:", error);
-      alert("Error processing files. Please try again.");
+      if (onError) {
+        onError("Error processing files. Please try again.");
+      } else {
+        alert("Error processing files. Please try again.");
+      }
     } finally {
       setIsProcessing(false);
     }

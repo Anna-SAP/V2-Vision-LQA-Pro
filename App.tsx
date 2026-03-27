@@ -63,8 +63,64 @@ const App: React.FC = () => {
   const [restoredGlossaryFiles, setRestoredGlossaryFiles] = useState<any[]>([]);
   const [glossaryLoadedFiles, setGlossaryLoadedFiles] = useState<any[]>([]);
 
+  // Custom Dialog State
+  const [dialogConfig, setDialogConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'alert' | 'confirm';
+    onConfirm: () => void;
+    onCancel: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'alert',
+    onConfirm: () => {},
+    onCancel: () => {}
+  });
+
+  const showAlert = (title: string, message: string): Promise<void> => {
+    return new Promise((resolve) => {
+      setDialogConfig({
+        isOpen: true,
+        title,
+        message,
+        type: 'alert',
+        onConfirm: () => {
+          setDialogConfig(prev => ({ ...prev, isOpen: false }));
+          resolve();
+        },
+        onCancel: () => {
+          setDialogConfig(prev => ({ ...prev, isOpen: false }));
+          resolve();
+        }
+      });
+    });
+  };
+
+  const showConfirm = (title: string, message: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setDialogConfig({
+        isOpen: true,
+        title,
+        message,
+        type: 'confirm',
+        onConfirm: () => {
+          setDialogConfig(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setDialogConfig(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+  };
+
   const t = UI_TEXT[appLanguage];
   const abortControllerRef = useRef<AbortController | null>(null);
+  const runTokenRef = useRef<number>(0);
 
   // --- Session Persistence Logic ---
   useEffect(() => {
@@ -237,15 +293,23 @@ const App: React.FC = () => {
     localStorage.setItem('vision_lqa_lang', newLang);
   };
 
-  // Start Over Logic (Explicitly clears everything)
-  const handleStartOver = () => {
-    if (pairs.length > 0) {
-        if (!window.confirm("Are you sure you want to start over? This will clear ALL current screenshots and reports.")) {
-            return;
-        }
+  // Unified Reset Helper
+  const resetWorkspace = async ({ preserveContext }: { preserveContext: boolean }) => {
+    runTokenRef.current += 1; // Invalidate any running async tasks
+
+    // Abort any running bulk analysis
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
     }
+
+    // Clear screenshots and related UI state
     setPairs([]);
     setSelectedPairId(null);
+    setHoveredIssueId(null);
+    setActiveIssueId(null);
+    setBatchStats(null);
+    setAnalysisProgress(null);
     setBulkState({
         isProcessing: false,
         total: 0,
@@ -255,20 +319,51 @@ const App: React.FC = () => {
         errors: [],
         isComplete: false
     });
-    clearSession();
-    // Note: We deliberately do NOT clear glossaryText here to allow persistence if user just made a mistake with Screenshots.
-    // Use the "Clear" button in GlossaryManager for that.
+
+    if (!preserveContext) {
+        // Clear context
+        setGlossaryText('');
+        setStyleGuideRules([]);
+        setGlossaryDetectedLang(null);
+        setRestoredGlossaryFiles([]);
+        setGlossaryLoadedFiles([]);
+        glossaryManagerRef.current?.resetAllContext();
+        
+        // Clear initialization state to show onboarding again
+        localStorage.removeItem('vision_lqa_initialized');
+        setShowOnboarding(true);
+    }
+
+    // Clear session persistence
+    await clearSession();
   };
 
-  // New: Clear only screenshots list
-  const handleClearScreenshots = (e: React.MouseEvent) => {
+  // Start Over Logic (Explicitly clears everything)
+  const handleStartOver = async () => {
+    if (pairs.length > 0 || glossaryLoadedFiles.length > 0 || glossaryText) {
+        const confirmed = await showConfirm(
+            "Start Over",
+            "Are you sure you want to start over? This will clear ALL current screenshots, reports, and project context."
+        );
+        if (!confirmed) {
+            return;
+        }
+    }
+    await resetWorkspace({ preserveContext: false });
+  };
+
+  // Clear only screenshots list
+  const handleClearScreenshots = async (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
       
       if (pairs.length > 0) {
-          if (window.confirm("Clear all screenshots? Your glossary/context will be preserved.")) {
-              setPairs([]);
-              setSelectedPairId(null);
+          const confirmed = await showConfirm(
+              "Clear Screenshots",
+              "Clear all screenshots? Your glossary/context will be preserved."
+          );
+          if (confirmed) {
+              await resetWorkspace({ preserveContext: true });
           }
       }
   };
@@ -330,7 +425,7 @@ const App: React.FC = () => {
     setActiveRightPanel('report');
   }, [appLanguage]);
 
-  const handlePairsCreated = (newPairs: ScreenshotPair[]) => {
+  const handlePairsCreated = async (newPairs: ScreenshotPair[]) => {
     // Check for language mismatch
     if (newPairs.length > 0 && glossaryDetectedLang) {
         const zipLang = newPairs[0].targetLanguage;
@@ -340,7 +435,8 @@ const App: React.FC = () => {
                .replace('{glossaryLang}', glossaryDetectedLang);
             
             // Ask user if they want to proceed despite mismatch
-            if (!window.confirm(msg)) {
+            const confirmed = await showConfirm("Language Mismatch", msg);
+            if (!confirmed) {
                 return; // Abort loading these pairs
             }
         }
@@ -360,6 +456,7 @@ const App: React.FC = () => {
   const handleGenerateReport = async () => {
     if (!selectedPairId) return;
 
+    const currentToken = runTokenRef.current;
     updatePairStatus(selectedPairId, { status: 'analyzing', errorMessage: undefined });
 
     const pair = pairs.find(p => p.id === selectedPairId);
@@ -375,11 +472,15 @@ const App: React.FC = () => {
         glossaryText,
         styleGuideRules,
         reportLanguage: appLanguage, // Pass current language
-        onProgress: (current, total) => setAnalysisProgress({ current, total })
+        onProgress: (current, total) => {
+            if (runTokenRef.current === currentToken) setAnalysisProgress({ current, total });
+        }
       };
 
       const response = await callTranslationQaLLM(payload);
       
+      if (runTokenRef.current !== currentToken) return; // Ignore stale result
+
       const report = response.report;
       const issues = report.issues || [];
       const critical = issues.filter(i => i.severity === 'Critical').length;
@@ -394,6 +495,7 @@ const App: React.FC = () => {
       setAnalysisProgress(null);
       
     } catch (error: any) {
+      if (runTokenRef.current !== currentToken) return; // Ignore stale error
       console.error("Analysis failed", error);
       const msg = error instanceof Error ? error.message : "Unknown error occurred";
       updatePairStatus(selectedPairId, { status: 'failed', errorMessage: msg });
@@ -430,7 +532,7 @@ const App: React.FC = () => {
     
     if (pendingItems.length === 0) return;
     if (pendingItems.length > 100) {
-      alert("Please process max 100 screenshots at a time.");
+      showAlert("Limit Exceeded", "Please process max 100 screenshots at a time.");
       return;
     }
 
@@ -556,6 +658,7 @@ const App: React.FC = () => {
     const pair = pairs.find(p => p.id === pairId);
     if (!pair || !pair.report) return;
 
+    const currentToken = runTokenRef.current;
     updatePairStatus(pairId, { status: 'analyzing', errorMessage: undefined });
     setAnalysisProgress({ current: 1, total: 2 });
 
@@ -570,11 +673,15 @@ const App: React.FC = () => {
         reportLanguage: appLanguage,
         isReverify: true,
         existingReport: pair.report,
-        onProgress: (current, total) => setAnalysisProgress({ current, total })
+        onProgress: (current, total) => {
+            if (runTokenRef.current === currentToken) setAnalysisProgress({ current, total });
+        }
       };
 
       const response = await callTranslationQaLLM(payload);
       
+      if (runTokenRef.current !== currentToken) return; // Ignore stale result
+
       updatePairStatus(pairId, { 
         status: 'completed', 
         report: response.report,
@@ -584,6 +691,7 @@ const App: React.FC = () => {
       setAnalysisProgress(null);
       
     } catch (error: any) {
+      if (runTokenRef.current !== currentToken) return; // Ignore stale error
       console.error("Reverify failed", error);
       const msg = error instanceof Error ? error.message : "Unknown error occurred";
       updatePairStatus(pairId, { status: 'failed', errorMessage: msg });
@@ -599,7 +707,7 @@ const App: React.FC = () => {
     );
 
     if (criticalItems.length === 0) {
-      alert("No 'Critical' or 'Poor' items found to export.");
+      showAlert("No Items", "No 'Critical' or 'Poor' items found to export.");
       return;
     }
 
@@ -631,7 +739,7 @@ const App: React.FC = () => {
   const generateBulkZip = async () => {
     const completedPairs = pairs.filter(p => p.status === 'completed' && p.report && p.report.overall);
     if (completedPairs.length === 0) {
-      alert("No completed reports to download.");
+      showAlert("No Reports", "No completed reports to download.");
       return;
     }
 
@@ -793,7 +901,11 @@ const App: React.FC = () => {
           )}
 
           <div className="p-4 border-b border-slate-100">
-            <UploadArea onPairsCreated={handlePairsCreated} t={t} />
+            <UploadArea 
+              onPairsCreated={handlePairsCreated} 
+              t={t} 
+              onError={(msg) => showAlert("Upload Error", msg)}
+            />
           </div>
           
           <div className="p-0 border-b border-slate-100 bg-slate-50">
@@ -812,6 +924,7 @@ const App: React.FC = () => {
               t={t}
               initialLoadedFiles={restoredGlossaryFiles}
               onLoadedFilesChange={setGlossaryLoadedFiles}
+              onConfirm={showConfirm}
             />
           </div>
 
@@ -898,12 +1011,42 @@ const App: React.FC = () => {
                 onIssueClick={setActiveIssueId}
                 analysisProgress={analysisProgress}
                 onReverify={() => selectedPair && handleReverify(selectedPair.id)}
+                onError={showAlert}
               />
             )}
           </Suspense>
         </aside>
 
       </main>
+
+      {/* Custom Dialog */}
+      {dialogConfig.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="p-5">
+              <h3 className="text-lg font-bold text-slate-900 mb-2">{dialogConfig.title}</h3>
+              <p className="text-sm text-slate-600">{dialogConfig.message}</p>
+            </div>
+            <div className="bg-slate-50 px-5 py-3 flex justify-end space-x-2 border-t border-slate-200">
+              {dialogConfig.type === 'confirm' && (
+                <button
+                  onClick={dialogConfig.onCancel}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                onClick={dialogConfig.onConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors"
+              >
+                {dialogConfig.type === 'confirm' ? 'Confirm' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

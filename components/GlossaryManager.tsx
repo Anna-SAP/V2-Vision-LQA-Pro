@@ -7,6 +7,7 @@ import { StyleGuideRule } from '../types';
 
 export interface GlossaryManagerRef {
   loadPreset: (lang: 'fr-FR' | 'de-DE') => Promise<void>;
+  resetAllContext: () => void;
 }
 
 interface GlossaryManagerProps {
@@ -18,6 +19,7 @@ interface GlossaryManagerProps {
   t: any;
   initialLoadedFiles?: LoadedFile[];
   onLoadedFilesChange?: (files: LoadedFile[]) => void;
+  onConfirm?: (title: string, msg: string) => Promise<boolean>;
 }
 
 interface GlossaryHistoryItem {
@@ -36,7 +38,7 @@ interface LoadedFile {
   rules?: StyleGuideRule[]; // For style guide
 }
 
-export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, styleGuideRules = [], onStyleGuideUpdate, onLangDetected, t, initialLoadedFiles, onLoadedFilesChange }, ref) => {
+export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerProps>(({ currentGlossary, onUpdate, styleGuideRules = [], onStyleGuideUpdate, onLangDetected, t, initialLoadedFiles, onLoadedFilesChange, onConfirm }, ref) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'import'>('import'); // Default to import
   const [isDragging, setIsDragging] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -68,11 +70,19 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
   useEffect(() => {
     if (activeTab === 'import') {
         recompileGlossary(loadedFiles);
+        
+        // Sync style guide rules to parent
+        if (onStyleGuideUpdate) {
+            const allRules = loadedFiles
+                .filter(f => f.type === 'styleguide' && f.rules)
+                .flatMap(f => f.rules as StyleGuideRule[]);
+            onStyleGuideUpdate(allRules);
+        }
     }
     if (onLoadedFilesChange) {
       onLoadedFilesChange(loadedFiles);
     }
-  }, [loadedFiles, activeTab, onLoadedFilesChange]);
+  }, [loadedFiles, activeTab, onLoadedFilesChange, onStyleGuideUpdate]);
 
   const saveToHistory = (name: string, content: string, count: number) => {
     const newItem: GlossaryHistoryItem = {
@@ -135,11 +145,15 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
     onUpdate(mergedContent);
   };
 
-  const handleResetContext = (e: React.MouseEvent) => {
+  const handleResetContext = async (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
       
-      if (window.confirm("Are you sure you want to remove all loaded glossary files?")) {
+      const confirmed = onConfirm 
+        ? await onConfirm("Reset Context", "Are you sure you want to remove all loaded glossary files?")
+        : window.confirm("Are you sure you want to remove all loaded glossary files?");
+        
+      if (confirmed) {
           setLoadedFiles([]);
           onUpdate("");
       }
@@ -325,8 +339,19 @@ export const GlossaryManager = forwardRef<GlossaryManagerRef, GlossaryManagerPro
     }
   };
 
+  const resetAllContext = () => {
+    setLoadedFiles([]);
+    setTotalTerms(0);
+    setError(null);
+    onUpdate("");
+    if (onStyleGuideUpdate) onStyleGuideUpdate([]);
+    if (onLangDetected) onLangDetected(null);
+    if (onLoadedFilesChange) onLoadedFilesChange([]);
+  };
+
   useImperativeHandle(ref, () => ({
-    loadPreset: fetchDefaultGlossary
+    loadPreset: fetchDefaultGlossary,
+    resetAllContext
   }));
 
   // Helper to check if a specific language is already loaded

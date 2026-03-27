@@ -85,7 +85,16 @@ export async function loadSession(): Promise<PersistedSession | null> {
   }
 }
 
+export function cancelPendingSessionSave(): void {
+  if (throttleTimer !== null) {
+    window.clearTimeout(throttleTimer);
+    throttleTimer = null;
+  }
+  pendingData = null;
+}
+
 export async function clearSession(): Promise<void> {
+  cancelPendingSessionSave();
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {

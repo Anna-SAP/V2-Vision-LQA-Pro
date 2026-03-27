@@ -17,6 +17,7 @@ interface ReportPanelProps {
   onIssueClick: (id: string | null) => void;
   analysisProgress?: {current: number, total: number} | null;
   onReverify: () => void;
+  onError?: (title: string, msg: string) => void;
 }
 
 // --- JIRA Generator Logic ---
@@ -87,7 +88,8 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
   onIssueHover,
   onIssueClick,
   analysisProgress,
-  onReverify
+  onReverify,
+  onError
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [bugModalData, setBugModalData] = useState<JiraData | null>(null);
@@ -238,7 +240,11 @@ export const ReportPanel: React.FC<ReportPanelProps> = ({
         URL.revokeObjectURL(url);
     } catch (error) {
         console.error("Failed to generate HTML report", error);
-        alert("Failed to generate report. Please try again.");
+        if (onError) {
+            onError("Export Failed", "Failed to generate report. Please try again.");
+        } else {
+            alert("Failed to generate report. Please try again.");
+        }
     } finally {
         setIsExporting(false);
     }
