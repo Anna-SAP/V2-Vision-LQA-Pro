@@ -187,16 +187,26 @@ async function processImageUrl(url: string): Promise<ProcessedImage> {
 // Auto-healing Retry Logic
 async function retryWithBackoff<T>(
   fn: () => Promise<T>, 
-  retries = 2, 
+  retries = 3, 
   delay = 3000
 ): Promise<T> {
   try {
     return await fn();
-  } catch (error) {
+  } catch (error: any) {
     if (retries === 0) throw error;
-    console.warn(`LLM Call failed, retrying in ${delay}ms... (${retries} left). Error:`, error);
-    await new Promise(resolve => setTimeout(resolve, delay));
-    return retryWithBackoff(fn, retries - 1, delay * 2);
+    
+    const errorMessage = (error?.message || '').toLowerCase();
+    const isQuotaError = errorMessage.includes('quota') || 
+                         errorMessage.includes('429') ||
+                         errorMessage.includes('too many requests') ||
+                         error?.status === 429;
+                         
+    // If it's a quota error, wait much longer (e.g., 15s minimum) to allow the rate limit bucket to refill
+    const nextDelay = isQuotaError ? Math.max(delay * 2, 15000) : delay * 2;
+    
+    console.warn(`LLM Call failed, retrying in ${nextDelay}ms... (${retries} left). Error:`, error);
+    await new Promise(resolve => setTimeout(resolve, nextDelay));
+    return retryWithBackoff(fn, retries - 1, nextDelay);
   }
 }
 

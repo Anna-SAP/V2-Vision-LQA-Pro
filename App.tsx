@@ -581,7 +581,7 @@ const App: React.FC = () => {
       updatePairStatus(pair.id, { status: 'analyzing', errorMessage: undefined });
 
       try {
-        const timeoutMs = 120000;
+        const timeoutMs = 180000;
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error(`Request timed out (${timeoutMs/1000}s)`)), timeoutMs)
         );
@@ -648,7 +648,7 @@ const App: React.FC = () => {
       }
     };
 
-    const concurrency = 2;
+    const concurrency = 1;
     const queue = [...pendingItems];
     const workers = Array(concurrency).fill(null).map(async () => {
       while(queue.length > 0 && !signal.aborted && currentToken === runTokenRef.current) {
@@ -662,7 +662,8 @@ const App: React.FC = () => {
             success: success ? prev.success + 1 : prev.success,
             failed: success ? prev.failed : prev.failed + 1
           }));
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Add a longer delay between items to respect API rate limits (15 RPM for free tier)
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
       }
     });
