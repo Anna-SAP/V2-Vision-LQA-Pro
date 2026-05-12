@@ -62,6 +62,7 @@ const App: React.FC = () => {
   const [isRestoring, setIsRestoring] = useState(true);
   const [restoredGlossaryFiles, setRestoredGlossaryFiles] = useState<LoadedGlossaryFile[]>([]);
   const [glossaryLoadedFiles, setGlossaryLoadedFiles] = useState<LoadedGlossaryFile[]>([]);
+  const [filterText, setFilterText] = useState('');
 
   // Custom Dialog State
   const [dialogConfig, setDialogConfig] = useState<{
@@ -308,6 +309,7 @@ const App: React.FC = () => {
 
     // Clear screenshots and related UI state
     setPairs([]);
+    setFilterText('');
     setSelectedPairId(null);
     setHoveredIssueId(null);
     setActiveIssueId(null);
@@ -948,7 +950,7 @@ const App: React.FC = () => {
             />
           </div>
 
-          <div className="p-2 bg-slate-50 text-xs font-bold text-slate-400 uppercase tracking-wider px-4 py-3 flex justify-between items-center relative z-10">
+          <div className="p-2 bg-slate-50 text-xs font-bold text-slate-400 uppercase tracking-wider px-4 py-3 flex justify-between items-center relative z-10 border-b border-slate-100">
             <span>{t.screenshotsList} ({pairs.length})</span>
             {pairs.length > 0 && (
                 <button 
@@ -962,6 +964,21 @@ const App: React.FC = () => {
                 </button>
             )}
           </div>
+
+          {pairs.length > 0 && (
+            <div className="px-4 py-2 border-b border-slate-200 bg-white shadow-sm z-10">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Filter by filename..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  className="w-full text-sm px-3 py-1.5 pl-8 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <svg className="w-4 h-4 text-slate-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              </div>
+            </div>
+          )}
           
           {batchStats && (
             <div className="px-4 py-2">
@@ -970,7 +987,7 @@ const App: React.FC = () => {
           )}
 
           <PairList 
-            pairs={pairs} 
+            pairs={filterText ? pairs.filter(p => p.fileName.toLowerCase().includes(filterText.toLowerCase()) || p.id.toLowerCase().includes(filterText.toLowerCase())) : pairs} 
             selectedId={selectedPairId} 
             onSelect={(id) => {
               setSelectedPairId(id);
