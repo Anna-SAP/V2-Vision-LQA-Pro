@@ -115,6 +115,8 @@ export interface LlmRequestPayload {
   targetLanguage: SupportedLocale;
   glossaryText?: string;
   styleGuideRules?: StyleGuideRule[];
+  sourceStructureRef?: string;
+  sourceStructureImage?: string;
   reportLanguage: AppLanguage; // Add report language preference
   onProgress?: (currentRun: number, totalRuns: number) => void;
   isReverify?: boolean;

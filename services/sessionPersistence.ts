@@ -14,6 +14,8 @@ export interface PersistedSession {
     isReverified?: boolean;
   }>;
   glossaryText: string;
+  sourceStructureRef?: string;
+  sourceStructureImage?: string;
   styleGuideRules: StyleGuideRule[];
   glossaryLoadedFiles: LoadedGlossaryFile[];
   savedAt: number;

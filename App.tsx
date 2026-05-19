@@ -8,7 +8,7 @@ import { callTranslationQaLLM } from './services/llmService';
 import { saveSession, loadSession, clearSession, saveSessionThrottled } from './services/sessionPersistence';
 import { generateReportHtml, generateExportFilename } from './services/reportGenerator';
 import { BatchProgressPanel } from './components/BatchProgressPanel';
-import { Layers, Activity, BookOpen, PanelLeftOpen, PanelLeftClose, PlayCircle, Globe, Loader2, RotateCcw, Trash2, GripVertical, BookDown } from 'lucide-react';
+import { Layers, Activity, BookOpen, PanelLeftOpen, PanelLeftClose, PlayCircle, Globe, Loader2, RotateCcw, Trash2, GripVertical, BookDown, FileText, ImagePlus, X } from 'lucide-react';
 import { LLM_DISPLAY_NAME, APP_VERSION, UI_TEXT } from './constants';
 import JSZip from 'jszip';
 
@@ -62,6 +62,8 @@ const App: React.FC = () => {
   const [isRestoring, setIsRestoring] = useState(true);
   const [restoredGlossaryFiles, setRestoredGlossaryFiles] = useState<LoadedGlossaryFile[]>([]);
   const [glossaryLoadedFiles, setGlossaryLoadedFiles] = useState<LoadedGlossaryFile[]>([]);
+  const [sourceStructureRef, setSourceStructureRef] = useState('');
+  const [sourceStructureImage, setSourceStructureImage] = useState<string | null>(null);
   const [filterText, setFilterText] = useState('');
   const [isScreenshotDrawerOpen, setIsScreenshotDrawerOpen] = useState(false);
 
@@ -125,7 +127,7 @@ const App: React.FC = () => {
   const runTokenRef = useRef<number>(0);
 
   // --- Session Persistence Logic ---
-  const hasPersistableSessionData = pairs.length > 0 || glossaryText.trim().length > 0 || styleGuideRules.length > 0 || glossaryLoadedFiles.length > 0;
+  const hasPersistableSessionData = pairs.length > 0 || glossaryText.trim().length > 0 || sourceStructureRef.trim().length > 0 || !!sourceStructureImage || styleGuideRules.length > 0 || glossaryLoadedFiles.length > 0;
 
   useEffect(() => {
     loadSession().then(session => {
@@ -151,6 +153,8 @@ const App: React.FC = () => {
         }
         
         if (session.glossaryText) setGlossaryText(session.glossaryText);
+        if (session.sourceStructureRef) setSourceStructureRef(session.sourceStructureRef);
+        if (session.sourceStructureImage) setSourceStructureImage(session.sourceStructureImage);
         if (session.styleGuideRules) setStyleGuideRules(session.styleGuideRules);
         if (session.glossaryLoadedFiles && session.glossaryLoadedFiles.length > 0) {
           setRestoredGlossaryFiles(session.glossaryLoadedFiles);
@@ -183,11 +187,13 @@ const App: React.FC = () => {
         isReverified: p.isReverified
       })),
       glossaryText,
+      sourceStructureRef,
+      sourceStructureImage: sourceStructureImage || undefined,
       styleGuideRules,
       glossaryLoadedFiles: glossaryLoadedFiles,
       savedAt: Date.now()
     });
-  }, [pairs, glossaryText, styleGuideRules, glossaryLoadedFiles, isRestoring, hasPersistableSessionData]);
+  }, [pairs, glossaryText, sourceStructureRef, sourceStructureImage, styleGuideRules, glossaryLoadedFiles, isRestoring, hasPersistableSessionData]);
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -219,6 +225,8 @@ const App: React.FC = () => {
             isReverified: p.isReverified
           })),
           glossaryText,
+          sourceStructureRef,
+          sourceStructureImage: sourceStructureImage || undefined,
           styleGuideRules,
           glossaryLoadedFiles: glossaryLoadedFiles,
           savedAt: Date.now()
@@ -227,7 +235,7 @@ const App: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
-  }, [pairs, glossaryText, styleGuideRules, glossaryLoadedFiles, isRestoring, hasPersistableSessionData]);
+  }, [pairs, glossaryText, sourceStructureRef, sourceStructureImage, styleGuideRules, glossaryLoadedFiles, isRestoring, hasPersistableSessionData]);
 
   // --- Resizing Logic ---
   const startResizingRight = useCallback((e: React.MouseEvent) => {
@@ -330,6 +338,8 @@ const App: React.FC = () => {
     if (!preserveContext) {
         // Clear context
         setGlossaryText('');
+        setSourceStructureRef('');
+        setSourceStructureImage(null);
         setStyleGuideRules([]);
         setGlossaryDetectedLang(null);
         setRestoredGlossaryFiles([]);
@@ -347,6 +357,8 @@ const App: React.FC = () => {
         saveSessionThrottled({
             pairs: [],
             glossaryText,
+            sourceStructureRef,
+            sourceStructureImage: sourceStructureImage || undefined,
             styleGuideRules,
             glossaryLoadedFiles,
             savedAt: Date.now()
@@ -354,7 +366,30 @@ const App: React.FC = () => {
     }
   };
 
-  // Start Over Logic (Explicitly clears everything)
+  const handleSourceStructureImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setDialogConfig({
+        isOpen: true,
+        title: "File Too Large",
+        message: "Reference image must be less than 5MB.",
+        type: 'alert',
+        onConfirm: () => setDialogConfig(prev => ({ ...prev, isOpen: false })),
+        onCancel: () => setDialogConfig(prev => ({ ...prev, isOpen: false }))
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        setSourceStructureImage(base64);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // Reset input
+  };
   const handleStartOver = async () => {
     if (hasPersistableSessionData) {
         const confirmed = await showConfirm(
@@ -486,6 +521,8 @@ const App: React.FC = () => {
         deImageBase64: pair.deImageUrl,
         targetLanguage: pair.targetLanguage,
         glossaryText,
+        sourceStructureRef,
+        sourceStructureImage: sourceStructureImage || undefined,
         styleGuideRules,
         reportLanguage: appLanguage, // Pass current language
         onProgress: (current, total) => {
@@ -596,6 +633,8 @@ const App: React.FC = () => {
           deImageBase64: pair.deImageUrl,
           targetLanguage: pair.targetLanguage,
           glossaryText,
+          sourceStructureRef,
+          sourceStructureImage: sourceStructureImage || undefined,
           styleGuideRules,
           reportLanguage: appLanguage // Pass current language
         };
@@ -694,6 +733,8 @@ const App: React.FC = () => {
         deImageBase64: pair.deImageUrl,
         targetLanguage: pair.targetLanguage,
         glossaryText,
+        sourceStructureRef,
+        sourceStructureImage: sourceStructureImage || undefined,
         styleGuideRules,
         reportLanguage: appLanguage,
         isReverify: true,
@@ -925,31 +966,69 @@ const App: React.FC = () => {
               </div>
           )}
 
-          <div className="p-4 border-b border-slate-100">
-            <UploadArea 
-              onPairsCreated={handlePairsCreated} 
-              t={t} 
-              onError={(msg) => showAlert("Upload Error", msg)}
-            />
-          </div>
-          
-          <div className="p-0 border-b border-slate-100 bg-slate-50">
-            <div className="flex items-center text-xs font-bold text-slate-500 p-4 pb-2">
-               <BookOpen className="w-3 h-3 mr-1" />
-               {t.projectContext}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4 border-b border-slate-100 flex-shrink-0">
+              <UploadArea 
+                onPairsCreated={handlePairsCreated} 
+                t={t} 
+                onError={(msg) => showAlert("Upload Error", msg)}
+              />
             </div>
             
-            <GlossaryManager 
-              ref={glossaryManagerRef}
-              currentGlossary={glossaryText}
-              onUpdate={setGlossaryText}
-              onStyleGuideUpdate={setStyleGuideRules}
-              onLangDetected={setGlossaryDetectedLang}
-              t={t}
-              initialLoadedFiles={restoredGlossaryFiles}
-              onLoadedFilesChange={setGlossaryLoadedFiles}
-              onConfirm={showConfirm}
-            />
+            <div className="p-0 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+              <div className="flex items-center text-xs font-bold text-slate-500 p-4 pb-2">
+                 <BookOpen className="w-3 h-3 mr-1" />
+                 {t.projectContext}
+              </div>
+              
+              <GlossaryManager 
+                ref={glossaryManagerRef}
+                currentGlossary={glossaryText}
+                onUpdate={setGlossaryText}
+                onStyleGuideUpdate={setStyleGuideRules}
+                onLangDetected={setGlossaryDetectedLang}
+                t={t}
+                initialLoadedFiles={restoredGlossaryFiles}
+                onLoadedFilesChange={setGlossaryLoadedFiles}
+                onConfirm={showConfirm}
+              />
+            </div>
+
+            <div className="p-4 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                 <div className="flex items-center text-xs font-bold text-slate-500">
+                    <FileText className="w-3 h-3 mr-1" />
+                    {appLanguage === 'zh' ? '源结构与变量参考 / 提示词' : 'Source Structure & Prompt'}
+                 </div>
+                 <label className="cursor-pointer text-blue-500 hover:text-blue-600 transition-colors" title={appLanguage === 'zh' ? '上传参考图片' : 'Upload Reference Image'}>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleSourceStructureImageUpload} 
+                    />
+                    <ImagePlus className="w-4 h-4" />
+                 </label>
+              </div>
+              <textarea
+                value={sourceStructureRef}
+                onChange={(e) => setSourceStructureRef(e.target.value)}
+                placeholder={appLanguage === 'zh' ? '在此粘贴源字符串以提供占位符上下文（例如：Hello {{$Brand_DisplayName}}...）\n\n或提供全局分析提示词...' : 'Paste source string to provide placeholder context (e.g., Hello {{$Brand_DisplayName}}...)\n\nOr provide global prompt...'}
+                className="w-full h-32 p-2 text-xs border border-slate-200 rounded bg-white text-slate-700 font-mono resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors placeholder:text-slate-400 placeholder:italic mb-2"
+              />
+              {sourceStructureImage && (
+                <div className="relative inline-block mt-1 group rounded border border-slate-200 overflow-hidden shadow-sm">
+                  <img src={sourceStructureImage} alt="Reference" className="max-h-32 object-contain" />
+                  <button 
+                    onClick={() => setSourceStructureImage(null)}
+                    className="absolute top-1 right-1 bg-white/80 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all shadow-sm"
+                    title={appLanguage === 'zh' ? '移除图片' : 'Remove Image'}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="p-4 bg-slate-50 border-t border-slate-200 mt-auto shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
