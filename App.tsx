@@ -63,6 +63,7 @@ const App: React.FC = () => {
   const [restoredGlossaryFiles, setRestoredGlossaryFiles] = useState<LoadedGlossaryFile[]>([]);
   const [glossaryLoadedFiles, setGlossaryLoadedFiles] = useState<LoadedGlossaryFile[]>([]);
   const [filterText, setFilterText] = useState('');
+  const [isScreenshotDrawerOpen, setIsScreenshotDrawerOpen] = useState(false);
 
   // Custom Dialog State
   const [dialogConfig, setDialogConfig] = useState<{
@@ -310,6 +311,7 @@ const App: React.FC = () => {
     // Clear screenshots and related UI state
     setPairs([]);
     setFilterText('');
+    setIsScreenshotDrawerOpen(false);
     setSelectedPairId(null);
     setHoveredIssueId(null);
     setActiveIssueId(null);
@@ -950,61 +952,103 @@ const App: React.FC = () => {
             />
           </div>
 
-          <div className="p-2 bg-slate-50 text-xs font-bold text-slate-400 uppercase tracking-wider px-4 py-3 flex justify-between items-center relative z-10 border-b border-slate-100">
-            <span>{t.screenshotsList} ({pairs.length})</span>
-            {pairs.length > 0 && (
-                <button 
-                    type="button"
-                    onClick={(e) => handleClearScreenshots(e)}
-                    className="text-[10px] text-red-500 hover:bg-red-50 px-2 py-0.5 rounded flex items-center border border-red-200 transition-colors cursor-pointer"
-                    title={t.clearList}
-                >
-                    <Trash2 className="w-3 h-3 mr-1" />
-                    {t.glossary.clear}
-                </button>
+          <div className="p-4 bg-slate-50 border-t border-slate-200 mt-auto shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
+            <button
+               onClick={() => setIsScreenshotDrawerOpen(true)}
+               className="w-full flex items-center justify-between bg-white border border-slate-300 rounded-lg p-3 hover:border-blue-400 hover:shadow-md transition-all group"
+            >
+               <div className="flex items-center text-sm font-bold text-slate-700">
+                  <Layers className="w-5 h-5 text-blue-500 mr-2 group-hover:scale-110 transition-transform" />
+                  {t.screenshotsList} 
+                  <span className="ml-2 bg-blue-100 text-blue-800 py-0.5 px-2 rounded-full text-xs">
+                    {pairs.length}
+                  </span>
+               </div>
+               <PanelLeftOpen className="w-4 h-4 text-slate-400 group-hover:text-blue-500" />
+            </button>
+            {batchStats && (
+              <div className="mt-2">
+                <BatchProgressPanel stats={batchStats} />
+              </div>
             )}
           </div>
-
-          {pairs.length > 0 && (
-            <div className="px-4 py-2 border-b border-slate-200 bg-white shadow-sm z-10">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Filter by filename..."
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  className="w-full text-sm px-3 py-1.5 pl-8 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
-                <svg className="w-4 h-4 text-slate-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-              </div>
-            </div>
-          )}
-          
-          {batchStats && (
-            <div className="px-4 py-2">
-              <BatchProgressPanel stats={batchStats} />
-            </div>
-          )}
-
-          <PairList 
-            pairs={filterText ? pairs.filter(p => p.fileName.toLowerCase().includes(filterText.toLowerCase()) || p.id.toLowerCase().includes(filterText.toLowerCase())) : pairs} 
-            selectedId={selectedPairId} 
-            onSelect={(id) => {
-              setSelectedPairId(id);
-              setActiveRightPanel('report');
-            }} 
-          />
         </aside>
 
         <button 
           onClick={() => setSidebarOpen(!isSidebarOpen)}
-          className="absolute bottom-4 left-4 z-50 p-2 bg-white border border-slate-300 rounded-full shadow-md text-slate-600 hover:bg-slate-50"
+          className="absolute bottom-20 left-4 z-40 p-2 bg-white border border-slate-300 rounded-full shadow-md text-slate-600 hover:bg-slate-50"
           style={{ left: isSidebarOpen ? '19rem' : '1rem' }}
         >
           {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
         </button>
 
         <section className="flex-1 relative bg-slate-200 overflow-hidden flex flex-col min-w-0">
+          
+          {/* Drawer overlay and container */}
+          {isScreenshotDrawerOpen && (
+            <div className="absolute inset-0 z-[100] flex">
+               {/* Backdrop */}
+               <div 
+                  className="absolute inset-0 bg-slate-900/20 backdrop-blur-[1px] transition-opacity"
+                  onClick={() => setIsScreenshotDrawerOpen(false)}
+               />
+               
+               {/* Drawer Panel */}
+               <div className="relative w-80 h-full bg-white shadow-2xl border-r border-slate-200 flex flex-col transition-transform duration-300 transform translate-x-0">
+                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                     <h3 className="font-bold text-slate-800 flex items-center">
+                       <Layers className="w-4 h-4 mr-2 text-blue-500" />
+                       {t.screenshotsList} ({pairs.length})
+                     </h3>
+                     <div className="flex items-center space-x-2">
+                       {pairs.length > 0 && (
+                          <button 
+                              type="button"
+                              onClick={(e) => handleClearScreenshots(e)}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                              title={t.clearList}
+                          >
+                              <Trash2 className="w-4 h-4" />
+                          </button>
+                       )}
+                       <button 
+                          onClick={() => setIsScreenshotDrawerOpen(false)}
+                          className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded transition-colors"
+                       >
+                          <PanelLeftClose className="w-5 h-5" />
+                       </button>
+                     </div>
+                  </div>
+
+                  {pairs.length > 0 && (
+                    <div className="px-4 py-3 border-b border-slate-200 bg-white">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder={appLanguage === 'zh' ? "搜索文件名..." : "Filter by filename..."}
+                          value={filterText}
+                          onChange={(e) => setFilterText(e.target.value)}
+                          className="w-full text-sm px-3 py-2 pl-9 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+                        />
+                        <svg className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex-1 overflow-y-auto">
+                     <PairList 
+                       pairs={filterText ? pairs.filter(p => p.fileName.toLowerCase().includes(filterText.toLowerCase()) || p.id.toLowerCase().includes(filterText.toLowerCase())) : pairs} 
+                       selectedId={selectedPairId} 
+                       onSelect={(id) => {
+                         setSelectedPairId(id);
+                         setActiveRightPanel('report');
+                       }} 
+                     />
+                  </div>
+               </div>
+            </div>
+          )}
+
           <CompareView 
             pair={selectedPair} 
             t={t} 
