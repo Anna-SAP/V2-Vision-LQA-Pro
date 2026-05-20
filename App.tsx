@@ -390,6 +390,41 @@ const App: React.FC = () => {
     reader.readAsDataURL(file);
     e.target.value = ''; // Reset input
   };
+  const handlePasteSourceImage = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            const file = items[i].getAsFile();
+            if (!file) continue;
+
+            if (file.size > 5 * 1024 * 1024) {
+              setDialogConfig({
+                isOpen: true,
+                title: "File Too Large",
+                message: "Reference image must be less than 5MB.",
+                type: 'alert',
+                onConfirm: () => setDialogConfig(prev => ({ ...prev, isOpen: false })),
+                onCancel: () => setDialogConfig(prev => ({ ...prev, isOpen: false }))
+              });
+              return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const base64 = event.target?.result as string;
+                setSourceStructureImage(base64);
+            };
+            reader.readAsDataURL(file);
+            
+            // Prevent default behavior (which might insert the image file name as text)
+            e.preventDefault();
+            break; 
+        }
+    }
+  };
+
   const handleStartOver = async () => {
     if (hasPersistableSessionData) {
         const confirmed = await showConfirm(
@@ -1013,7 +1048,8 @@ const App: React.FC = () => {
               <textarea
                 value={sourceStructureRef}
                 onChange={(e) => setSourceStructureRef(e.target.value)}
-                placeholder={appLanguage === 'zh' ? '在此粘贴源字符串以提供占位符上下文（例如：Hello {{$Brand_DisplayName}}...）\n\n或提供全局分析提示词...' : 'Paste source string to provide placeholder context (e.g., Hello {{$Brand_DisplayName}}...)\n\nOr provide global prompt...'}
+                onPaste={handlePasteSourceImage}
+                placeholder={appLanguage === 'zh' ? '在此粘贴源字符串以提供占位符上下文（例如：Hello {{$Brand_DisplayName}}...）\n\n可直接粘贴参考图\n\n或提供全局分析提示词...' : 'Paste source string to provide placeholder context (e.g., Hello {{$Brand_DisplayName}}...)\n\nPaste reference image directly\n\nOr provide global prompt...'}
                 className="w-full h-32 p-2 text-xs border border-slate-200 rounded bg-white text-slate-700 font-mono resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors placeholder:text-slate-400 placeholder:italic mb-2"
               />
               {sourceStructureImage && (

@@ -481,6 +481,7 @@ Inputs:
 2. targetScreenshot: ${langCode} Interface (Target)
 3. glossaryText (Optional): Project context/glossary strings.
 4. styleGuideRules (Optional): Official translation style rules.
+5. sourceStructureImage (Optional): Source structure screenshot/reference.
 
 ${taskDesc}
 ${skillsSection}
