@@ -156,20 +156,22 @@ export const CompareView: React.FC<CompareViewProps> = ({
         <div 
             style={{ gap: `${gapSize}px` }}
             className={`
-                flex p-8 min-w-fit mx-auto transition-all duration-300 ease-in-out
+                flex px-14 py-8 min-w-fit mx-auto transition-all duration-300 ease-in-out
                 ${isVertical ? 'flex-col items-center pb-20' : 'flex-row justify-center items-start'}
             `}
         >
           
           {/* Source Image Card */}
-          <div className="flex items-start gap-3 flex-shrink-0 transition-all duration-300 ease-out">
-            {/* Vertical Label - Sticky so it stays visible on tall images */}
-            <div 
-                className="bg-slate-700 text-white py-3 px-1.5 rounded shadow-sm text-xs font-bold tracking-wide flex items-center border border-slate-600 shrink-0 sticky top-8 z-10"
-                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-            >
-                <span className="opacity-75 mb-1.5 font-normal uppercase">{t.source}</span>
-                <span>en-US</span>
+          <div className="relative flex-shrink-0 transition-all duration-300 ease-out">
+            {/* Vertical Label - Sticky Floating */}
+            <div className="absolute top-0 bottom-0 left-0 -translate-x-full -ml-3 z-20 pointer-events-none">
+                <div 
+                    className="bg-slate-700 text-white py-3 px-1.5 rounded shadow-sm text-xs font-bold tracking-wide inline-flex items-center border border-slate-600 sticky top-8 pointer-events-auto"
+                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                >
+                    <span className="opacity-75 mb-1.5 font-normal uppercase">{t.source}</span>
+                    <span>en-US</span>
+                </div>
             </div>
 
             <div className="flex-col relative" style={{ width: `${currentImageWidth}px` }}>
@@ -195,14 +197,16 @@ export const CompareView: React.FC<CompareViewProps> = ({
           )}
 
           {/* Target Language Card */}
-          <div className="flex items-start gap-3 flex-shrink-0 transition-all duration-300 ease-out">
-            {/* Vertical Label - Sticky */}
-            <div 
-                className="bg-purple-600 text-white py-3 px-1.5 rounded shadow-sm text-xs font-bold tracking-wide flex items-center border border-purple-500 shrink-0 sticky top-8 z-10"
-                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-            >
-                <span className="opacity-75 mb-1.5 font-normal uppercase">{t.target}</span>
-                <span>{targetLabel}</span>
+          <div className="relative flex-shrink-0 transition-all duration-300 ease-out">
+            {/* Vertical Label - Sticky Floating on the Right */}
+            <div className="absolute top-0 bottom-0 right-0 translate-x-full ml-3 z-20 pointer-events-none">
+                <div 
+                    className="bg-purple-600 text-white py-3 px-1.5 rounded shadow-sm text-xs font-bold tracking-wide inline-flex items-center border border-purple-500 sticky top-8 pointer-events-auto"
+                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                >
+                    <span className="opacity-75 mb-1.5 font-normal uppercase">{t.target}</span>
+                    <span>{targetLabel}</span>
+                </div>
             </div>
 
             <div className="flex-col relative" style={{ width: `${currentImageWidth}px` }}>
